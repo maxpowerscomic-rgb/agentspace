@@ -60,7 +60,32 @@ One button — **Compile** — turns the day's log into a shareable thread:
 
 ---
 
-## 4. The hard part: auto-capturing "what changed" + before/after images
+## 4. Who writes what (so the builder doesn't guess)
+
+**Principle: wiwo is an observer, not a participant.** Your project's coding agent stays focused on the work and is *unaware wiwo exists*. wiwo watches the artifacts that work already produces (git commits + Claude Code session transcripts) and generates the log from them. This is what makes logging automatic, universal (any repo you point at it), and model-agnostic.
+
+There are two distinct "writing" moments — keep them separate:
+
+| Step | Who | How | AI? |
+|---|---|---|---|
+| **1. Detect a change** | wiwo (mechanical) | Watches git commits + session turns: a commit happened at 10:25 touching these files. | No |
+| **2. Summarize it** ("Added notebook feature") | **wiwo's own summarizer** | Feeds the diff + transcript slice to a model → one-line log entry. This is wiwo's model, swappable, *not* the project's agent. | Yes |
+| **3. Add a personal note** ("finally, it was the SameSite flag") | The user (optional) | Free-text field, always editable. | No |
+
+```
+your agent codes  ──▶  git commit + transcript  ──▶  wiwo reads both  ──▶  wiwo's summarizer writes the entry
+  (unaware of wiwo)         (the evidence)             (the observer)          (you edit if you want)
+```
+
+### The query rule (decided)
+wiwo **may query the project's agent for a sharper summary — but only *after the fact*, never during a build.**
+- ✅ After a change lands (commit made, session turn complete), wiwo may ask the agent: *"one-line summary of what you just did?"* to enrich the entry.
+- ❌ wiwo must **never** interrupt, prompt, or block the agent mid-build. No injected turns while work is in flight.
+- Implementation: wiwo watches for a "settled" signal (commit written / session idle) before any query. Passive transcript-reading is always the fallback if querying isn't available — so wiwo still works with any model, and the query is a quality boost, not a dependency.
+
+---
+
+## 5. The hard part: auto-capturing "what changed" + before/after images
 
 This is where wiwo lives or dies. Proposed capture pipeline (local-first):
 
@@ -79,7 +104,7 @@ This is where wiwo lives or dies. Proposed capture pipeline (local-first):
 
 ---
 
-## 5. Architecture (local-first)
+## 6. Architecture (local-first)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -112,7 +137,7 @@ This is where wiwo lives or dies. Proposed capture pipeline (local-first):
 
 ---
 
-## 6. Phased roadmap
+## 7. Phased roadmap
 
 **Phase 1 — Prove the loop (MVP)**
 Dashboard with project cards (latest context + build status) · quick-prompt box · daily log from git commits + session turns · rendered-diff before/after cards · manual note field · Compile → thread → copy-to-clipboard for X. *No auto app-screenshots yet.*
@@ -125,7 +150,7 @@ Direct posting via platform APIs · streaks / weekly digests · model-agnostic s
 
 ---
 
-## 7. Open questions for next session
+## 8. Open questions for next session
 1. **Desktop app vs. local web app?** Electron/Tauri gives a real tray + hotkeys; a local web app (like the current scaffold) is faster to ship. Leaning local web app for MVP.
 2. **Screenshot trigger for non-web projects** (CLI, libraries) — rendered-diff cards only, or terminal-output captures?
 3. **How opinionated should the auto-copy voice be?** A tone setting (technical / casual / hype) or fully manual?
