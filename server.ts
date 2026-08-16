@@ -5,6 +5,8 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { setupApiRoutes } from "./src/server/api.js";
+import { initWatchers } from "./src/server/watcher.js";
+import { startScheduler } from "./src/server/scheduler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +22,10 @@ async function startServer() {
 
   // wiwo API
   setupApiRoutes(app);
+
+  // Phase 2/3: resume auto-scan watchers and the scheduled-posting loop.
+  initWatchers();
+  startScheduler();
 
   // Serve uploaded before/after images
   app.use("/uploads", express.static(path.join(__dirname, "uploads")));

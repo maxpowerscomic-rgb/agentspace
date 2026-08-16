@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { WiwoData, Project, Change } from '../types.js';
+import type { WiwoData, Project, Change, SavedThread } from '../types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -85,4 +85,29 @@ export function updateChange(id: string, patch: Partial<Change>): Change | undef
   data.changes[i] = { ...data.changes[i], ...patch };
   write(data);
   return data.changes[i];
+}
+
+// ---- Saved threads (Phase 2/3) ----
+export function getThreads(): SavedThread[] {
+  return read().threads ?? [];
+}
+
+export function upsertThread(thread: SavedThread): SavedThread {
+  const data = read();
+  if (!data.threads) data.threads = [];
+  const i = data.threads.findIndex((t) => t.id === thread.id);
+  if (i >= 0) data.threads[i] = thread;
+  else data.threads.push(thread);
+  write(data);
+  return thread;
+}
+
+export function getThread(id: string): SavedThread | undefined {
+  return (read().threads ?? []).find((t) => t.id === id);
+}
+
+export function deleteThread(id: string): void {
+  const data = read();
+  data.threads = (data.threads ?? []).filter((t) => t.id !== id);
+  write(data);
 }

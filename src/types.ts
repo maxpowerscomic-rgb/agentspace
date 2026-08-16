@@ -11,10 +11,14 @@ export interface Project {
   /** Command run to determine build status, e.g. "npm test". */
   buildCmd?: string;
   buildStatus: BuildStatus;
+  /** URL of the running app, for Playwright before/after screenshots (Phase 2). */
+  appUrl?: string;
   /** Last paragraph of the project's chat, or its most recent prompt. */
   latestContext: string;
   lastActive?: string; // ISO timestamp
   createdAt: string;
+  /** Auto-scan on new commits when true (Phase 2 file watcher). */
+  autoScan?: boolean;
 }
 
 export interface Change {
@@ -52,7 +56,20 @@ export interface Thread {
 
 export type Platform = 'x' | 'li' | 'th' | 'ma';
 
+/** A persisted thread the user has edited and/or scheduled (Phase 2/3). */
+export interface SavedThread {
+  id: string;
+  thread: Thread;
+  createdAt: string;
+  updatedAt: string;
+  /** ISO time to post at; undefined = not scheduled. */
+  scheduledFor?: string;
+  status: 'draft' | 'scheduled' | 'posted';
+  postedAt?: string;
+}
+
 export interface WiwoData {
   projects: Project[];
   changes: Change[];
+  threads?: SavedThread[];
 }

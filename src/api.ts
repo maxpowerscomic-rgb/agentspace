@@ -1,5 +1,5 @@
 // Thin client for the wiwo API.
-import type { Project, Change, Thread, Platform } from './types';
+import type { Project, Change, Thread, Platform, SavedThread } from './types';
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -12,12 +12,23 @@ async function j<T>(res: Response): Promise<T> {
 export const api = {
   listProjects: () => fetch('/api/projects').then(j<(Project & { todayCount: number })[]>),
 
-  addProject: (body: { name: string; repoPath: string; buildCmd?: string }) =>
+  addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; autoScan?: boolean }) =>
     fetch('/api/projects', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then(j<Project>),
+
+  patchProject: (id: string, body: Partial<Pick<Project, 'appUrl' | 'buildCmd' | 'autoScan'>>) =>
+    fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(j<Project>),
+
+  screenshot: (id: string) =>
+    fetch(`/api/projects/${id}/screenshot`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(j<{ shot: { url: string }; changeId?: string }>),
 
   deleteProject: (id: string) => fetch(`/api/projects/${id}`, { method: 'DELETE' }),
 
@@ -61,7 +72,31 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ thread, platform }),
     }).then(j<{ formatted: Formatted }>),
+
+  digest: () => fetch('/api/digest').then(j<Digest>),
+
+  saveThread: (thread: Thread, scheduledFor?: string) =>
+    fetch('/api/threads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ thread, scheduledFor }),
+    }).then(j<SavedThread>),
+
+  postThread: (id: string) =>
+    fetch(`/api/threads/${id}/post`, { method: 'POST' }).then(
+      j<{ delivered: boolean; via: string; detail: string }>,
+    ),
 };
+
+export interface Digest {
+  from: string;
+  to: string;
+  totalChanges: number;
+  activeDays: number;
+  streak: number;
+  byProject: { projectId: string; name: string; count: number; summaries: string[] }[];
+  headline: string;
+}
 
 export interface Formatted {
   platform: Platform;

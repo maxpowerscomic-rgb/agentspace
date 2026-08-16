@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, type FC } from 'react';
-import { api, type Formatted } from './api';
+import { api, type Formatted, type Digest } from './api';
 import type { Project, Change, Thread, Platform } from './types';
 
-type View = 'dash' | 'log' | 'thread';
+type View = 'dash' | 'log' | 'thread' | 'digest';
 type P = Project & { todayCount?: number };
 
 const SendIcon = () => (
@@ -38,11 +38,14 @@ function ago(iso?: string) {
 export default function App() {
   const [view, setView] = useState<View>('dash');
   const [projects, setProjects] = useState<P[]>([]);
+  const [streak, setStreak] = useState(0);
   const [showAdd, setShowAdd] = useState(false);
+  const [toast, setToast] = useState('');
 
   const refresh = useCallback(async () => {
     try {
       setProjects(await api.listProjects());
+      setStreak((await api.digest()).streak);
     } catch (e) {
       console.error(e);
     }
@@ -50,6 +53,20 @@ export default function App() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // Live auto-scan: refresh when the watcher logs a new commit's changes.
+  useEffect(() => {
+    const es = new EventSource('/api/events');
+    es.addEventListener('scanned', (ev) => {
+      try {
+        const d = JSON.parse((ev as MessageEvent).data);
+        setToast(`Auto-logged ${d.added?.length ?? 0} change${d.added?.length === 1 ? '' : 's'}`);
+        setTimeout(() => setToast(''), 3000);
+      } catch { /* ignore */ }
+      refresh();
+    });
+    return () => es.close();
   }, [refresh]);
 
   const greeting = (() => {
@@ -78,7 +95,14 @@ export default function App() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
             wiwo Thread
           </button>
+          <button role="tab" aria-selected={view === 'digest'} onClick={() => setView('digest')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3v18h18" /><path d="M7 14l3-4 4 3 4-6" /></svg>
+            Weekly digest
+          </button>
         </div>
+        {streak > 0 && (
+          <div className="streak" title="Consecutive days shipping">🔥 {streak}-day streak</div>
+        )}
         <div>
           <div className="rail-label">Projects</div>
           <div className="projlist">
@@ -110,10 +134,43 @@ export default function App() {
         )}
         {view === 'log' && <DailyLog onCompile={() => setView('thread')} />}
         {view === 'thread' && <ThreadView />}
+        {view === 'digest' && <DigestView />}
       </main>
 
       {showAdd && <AddProjectModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); refresh(); }} />}
+      {toast && <div className="toast">✦ {toast}</div>}
     </div>
+  );
+}
+
+function DigestView() {
+  const [d, setD] = useState<Digest | null>(null);
+  useEffect(() => { api.digest().then(setD); }, []);
+  if (!d) return <div className="empty"><h3>Loading…</h3></div>;
+  return (
+    <>
+      <div className="head">
+        <span className="day">{d.from} → {d.to}</span>
+        <h1>This week 🔥 {d.streak}-day streak</h1>
+        <p>{d.headline}</p>
+      </div>
+      <div className="cards">
+        <div className="card"><div className="ctx"><span className="lab">Total changes</span><b style={{ fontSize: 28 }}>{d.totalChanges}</b></div></div>
+        <div className="card"><div className="ctx"><span className="lab">Active days</span><b style={{ fontSize: 28 }}>{d.activeDays}<span className="muted"> / 7</span></b></div></div>
+        <div className="card"><div className="ctx"><span className="lab">Current streak</span><b style={{ fontSize: 28 }}>{d.streak} 🔥</b></div></div>
+      </div>
+      <div style={{ marginTop: 20 }}>
+        {d.byProject.length === 0 && <p className="muted">Nothing logged in the last 7 days.</p>}
+        {d.byProject.map((p) => (
+          <div className="evc" key={p.projectId} style={{ marginBottom: 12 }}>
+            <div className="evh"><span className="sum">{p.name}</span><span className="diffstat">{p.count} change{p.count === 1 ? '' : 's'}</span></div>
+            <div style={{ padding: '0 16px 14px' }}>
+              {p.summaries.map((s, i) => <div key={i} className="muted" style={{ fontSize: 13.5, padding: '2px 0' }}>• {s}</div>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -172,6 +229,19 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
     onChange();
     setTimeout(() => setBusy(''), 2500);
   };
+  const snapshot = async () => {
+    setBusy('Capturing…');
+    try {
+      await api.screenshot(p.id);
+      setBusy('📸 snapshot attached');
+    } catch (e: any) { setBusy(e.message); }
+    onChange();
+    setTimeout(() => setBusy(''), 2500);
+  };
+  const toggleAuto = async () => {
+    await api.patchProject(p.id, { autoScan: !p.autoScan });
+    onChange();
+  };
   const remove = async () => {
     if (!confirm(`Remove ${p.name} from wiwo? (your repo is untouched)`)) return;
     await api.deleteProject(p.id);
@@ -188,6 +258,10 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
         </span>
         <button className="x" title="Remove" onClick={remove}>×</button>
       </div>
+      <button className={`auto ${p.autoScan ? 'on' : ''}`} onClick={toggleAuto}
+        title="Auto-log new commits as they land">
+        <span className="dot" /> Auto-scan {p.autoScan ? 'on' : 'off'}
+      </button>
       <div className="ctx"><span className="lab">Last chat</span>{p.latestContext}</div>
       <div className="stat">
         <span>{p.todayCount ?? 0} change{(p.todayCount ?? 0) === 1 ? '' : 's'} today</span>
@@ -202,6 +276,7 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
       <div className="card-actions">
         <button onClick={scan}>Scan git + chat</button>
         <button onClick={build} disabled={!p.buildCmd} title={p.buildCmd ? p.buildCmd : 'no build command set'}>Run build</button>
+        <button onClick={snapshot} disabled={!p.appUrl} title={p.appUrl ? `screenshot ${p.appUrl}` : 'set an app URL to enable'}>Snapshot</button>
       </div>
       {busy && <div className="muted" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{busy}</div>}
     </div>
@@ -299,6 +374,7 @@ function ThreadView() {
   const [thread, setThread] = useState<Thread | null>(null);
   const [fmt, setFmt] = useState<Formatted | null>(null);
   const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     api.compile('x').then((r) => { setThread(r.thread); setFmt(r.formatted); });
@@ -307,15 +383,50 @@ function ThreadView() {
   const pick = async (pl: Platform) => {
     setPlatform(pl);
     if (!thread) return;
-    const r = await api.export(thread, pl);
+    const r = await api.export({ ...thread, platform: pl }, pl);
     setFmt(r.formatted);
   };
 
+  // Persist an inline edit into the working thread copy (editable metadata).
+  const editIntro = (text: string) => thread && setThread({ ...thread, intro: text });
+  const editPost = (i: number, text: string) => {
+    if (!thread) return;
+    const posts = thread.posts.map((p, idx) => (idx === i ? { ...p, text } : p));
+    setThread({ ...thread, posts });
+  };
+  const editTags = (text: string) => thread && setThread({ ...thread, hashtags: text });
+
   const copy = async () => {
-    if (!fmt) return;
-    try { await navigator.clipboard.writeText(fmt.combined); } catch { /* clipboard blocked */ }
+    if (!thread) return;
+    const r = await api.export({ ...thread, platform }, platform);
+    try { await navigator.clipboard.writeText(r.formatted.combined); } catch { /* clipboard blocked */ }
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  };
+
+  const saveDraft = async () => {
+    if (!thread) return;
+    await api.saveThread({ ...thread, platform });
+    setStatus('Saved as draft');
+    setTimeout(() => setStatus(''), 2500);
+  };
+
+  const schedule = async () => {
+    if (!thread) return;
+    const when = prompt('Schedule for (YYYY-MM-DD HH:MM, local time):');
+    if (!when) return;
+    const iso = new Date(when.replace(' ', 'T')).toISOString();
+    await api.saveThread({ ...thread, platform }, iso);
+    setStatus(`Scheduled for ${new Date(iso).toLocaleString()}`);
+    setTimeout(() => setStatus(''), 3500);
+  };
+
+  const postNow = async () => {
+    if (!thread) return;
+    const saved = await api.saveThread({ ...thread, platform });
+    const r = await api.postThread(saved.id);
+    setStatus(r.detail);
+    setTimeout(() => setStatus(''), 3500);
   };
 
   if (!thread) return <div className="empty"><h3>Nothing to compile yet</h3><p className="muted">Log some changes today, then come back.</p></div>;
@@ -346,8 +457,10 @@ function ThreadView() {
           <div className="av">D</div>
           <div className="pb">
             <div className="ph"><span className="nm">You</span><span className="hd">@you</span><span className="ix">{numbered ? `1/${total}` : ''}</span></div>
-            <div className="pt" contentEditable suppressContentEditableWarning>{thread.intro}</div>
-            <div className="mt"><span className="h">{thread.hashtags}</span></div>
+            <div className="pt" contentEditable suppressContentEditableWarning
+              onBlur={(e) => editIntro(e.currentTarget.textContent ?? '')}>{thread.intro}</div>
+            <div className="pt" contentEditable suppressContentEditableWarning style={{ color: 'var(--brand)', fontSize: 13, marginTop: 6 }}
+              onBlur={(e) => editTags(e.currentTarget.textContent ?? '')}>{thread.hashtags}</div>
           </div>
         </div>
         {thread.posts.map((p, i) => (
@@ -355,7 +468,8 @@ function ThreadView() {
             <div className="av">D</div>
             <div className="pb">
               <div className="ph"><span className="nm">You</span><span className="hd">@you</span><span className="ix">{numbered ? `${i + 2}/${total}` : ''}</span></div>
-              <div className="pt" contentEditable suppressContentEditableWarning>{p.text}</div>
+              <div className="pt" contentEditable suppressContentEditableWarning
+                onBlur={(e) => editPost(i, e.currentTarget.textContent ?? '')}>{p.text}</div>
               <div className="mt">alt-text auto-written · {p.images.length} image{p.images.length === 1 ? '' : 's'}</div>
             </div>
           </div>
@@ -363,9 +477,13 @@ function ThreadView() {
       </div>
       <div className="exp">
         <div className="f">Format: <b>{fmt?.label}</b></div>
-        <button onClick={copy}>{copied ? '✓ Copied' : 'Export ↗'}</button>
+        <button className="btn-ghost" onClick={saveDraft}>Save draft</button>
+        <button className="btn-ghost" onClick={schedule}>Schedule…</button>
+        <button className="btn-ghost" onClick={postNow}>Post</button>
+        <button onClick={copy} style={{ marginLeft: 0 }}>{copied ? '✓ Copied' : 'Export ↗'}</button>
       </div>
-      <div className="foot">source: Claude Code session + git · edits are illustrative in this build</div>
+      {status && <div className="sent" style={{ marginTop: 10 }}>✓ {status}</div>}
+      <div className="foot">source: Claude Code session + git · edits are saved to your draft</div>
     </>
   );
 }
@@ -374,13 +492,20 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [buildCmd, setBuildCmd] = useState('');
+  const [appUrl, setAppUrl] = useState('');
+  const [autoScan, setAutoScan] = useState(true);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     setErr(''); setBusy(true);
     try {
-      await api.addProject({ name: name.trim(), repoPath: repoPath.trim(), buildCmd: buildCmd.trim() || undefined });
+      await api.addProject({
+        name: name.trim(), repoPath: repoPath.trim(),
+        buildCmd: buildCmd.trim() || undefined,
+        appUrl: appUrl.trim() || undefined,
+        autoScan,
+      });
       onAdded();
     } catch (e: any) { setErr(e.message); setBusy(false); }
   };
@@ -404,6 +529,15 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
           <input value={buildCmd} onChange={(e) => setBuildCmd(e.target.value)} placeholder="npm test" />
           <span className="hint">run to derive 🟢/🔴 build status</span>
         </div>
+        <div className="field">
+          <label>App URL <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></label>
+          <input value={appUrl} onChange={(e) => setAppUrl(e.target.value)} placeholder="http://localhost:5173" />
+          <span className="hint">for before/after screenshots of the running app</span>
+        </div>
+        <label className="checkrow">
+          <input type="checkbox" checked={autoScan} onChange={(e) => setAutoScan(e.target.checked)} />
+          <span>Auto-log new commits as they land (recommended)</span>
+        </label>
         {err && <div className="err">{err}</div>}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>Cancel</button>

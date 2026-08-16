@@ -1,10 +1,8 @@
 // Turns a commit (diff + subject + optional transcript context) into a one-line
 // log entry. This is *wiwo's own* summarizer — a swappable component, not the
-// project's coding agent. Defaults to Claude; falls back gracefully with no key.
+// project's coding agent. Model-agnostic (Phase 3) with a graceful fallback.
 import type { GitCommit } from './git.js';
-
-const MODEL = process.env.WIWO_MODEL || 'claude-opus-5';
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+import { generate } from './providers.js';
 
 /** Produce a short, human "what changed" line for a commit. */
 export async function summarizeCommit(
@@ -12,36 +10,9 @@ export async function summarizeCommit(
   projectName: string,
   agentContext?: string,
 ): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  // No key configured → honest heuristic fallback. wiwo still works, just less polished.
-  if (!key) return fallbackSummary(commit);
-
   const prompt = buildPrompt(commit, projectName, agentContext);
-  try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 60,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!res.ok) return fallbackSummary(commit);
-    const data: any = await res.json();
-    const text = (data?.content ?? [])
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('')
-      .trim();
-    return cleanLine(text) || fallbackSummary(commit);
-  } catch {
-    return fallbackSummary(commit);
-  }
+  const out = await generate(prompt, 60);
+  return (out && cleanLine(out)) || fallbackSummary(commit);
 }
 
 function buildPrompt(commit: GitCommit, projectName: string, agentContext?: string): string {

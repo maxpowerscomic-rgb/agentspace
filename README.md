@@ -13,14 +13,34 @@ coding agent mid-build.
 See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 [`docs/wiwo-mockup.html`](docs/wiwo-mockup.html) for the UI mockup.
 
-## What it does (Phase 1 MVP)
+## What it does
 
+**Phase 1 — the loop**
 - **Dashboard** — one card per project: latest chat context + build status, a
   quick-prompt box, and per-project scan/build actions.
 - **Daily log** — a chronological timeline of today's changes, summarized from
   git + the session transcript, with optional one-line notes you can add.
 - **wiwo thread** — one press compiles the day's log into a shareable thread,
   organized by project, reshaped for X / LinkedIn / Threads / Mastodon.
+
+**Phase 2 — effortless**
+- **Auto-scan** — a file watcher on each repo's `.git/logs/HEAD` logs new
+  commits the moment they land (never mid-build). Toggle per project; the
+  dashboard updates live over SSE.
+- **App screenshots** — capture before/after images of the running app via
+  Playwright (set an app URL). Read-only: it snaps the live app, never checks
+  out old commits.
+- **Editable, saved threads** — edit any line of the compiled thread; save it
+  as a draft.
+
+**Phase 3 — delightful**
+- **Model-agnostic summarizer** — Claude by default; Gemini or any
+  OpenAI-compatible endpoint via `WIWO_PROVIDER`; heuristic fallback with no key.
+- **Streaks + weekly digest** — a consecutive-days streak and a 7-day rollup by
+  project.
+- **Scheduled posting** — schedule a thread for later; wiwo fires it via a
+  configurable webhook (`WIWO_POST_WEBHOOK` → Zapier/Make/your own poster), or
+  marks it posted for manual paste.
 
 ## Run locally
 
