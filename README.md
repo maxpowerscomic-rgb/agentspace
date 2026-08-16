@@ -42,6 +42,19 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
   configurable webhook (`WIWO_POST_WEBHOOK` → Zapier/Make/your own poster), or
   marks it posted for manual paste.
 
+**Phase 4 — live session control**
+- **The prompt box drives a real Claude Code session** — typing into a project
+  card runs the prompt in that repo via the [Claude Agent SDK]
+  (`@anthropic-ai/claude-agent-sdk`), continuing the same conversation across
+  turns (the session id is persisted and resumed). The agent's reply shows on
+  the card, and wiwo auto-scans afterward so any commit it made is logged.
+- **After-the-fact summary query** — enable per project to have wiwo ask the
+  agent for a sharper one-line summary *once a commit has landed* — never
+  mid-build, read-only.
+- Requires `ANTHROPIC_API_KEY` and the optional SDK (`npm i
+  @anthropic-ai/claude-agent-sdk`). Without either, the prompt box gracefully
+  falls back to recording the prompt — wiwo still works.
+
 ## Run locally
 
 **Prerequisites:** Node.js, and local git repos you want to track.

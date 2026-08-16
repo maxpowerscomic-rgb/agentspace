@@ -200,16 +200,33 @@ function Dashboard({ greeting, today, projects, onAdd, onChange }: {
 }
 
 const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
-  const [text, setText] = useState(p.latestContext && p.buildStatus === 'failing' ? '' : '');
+  const [text, setText] = useState('');
   const [sent, setSent] = useState('');
+  const [reply, setReply] = useState('');
+  const [working, setWorking] = useState(false);
   const [busy, setBusy] = useState('');
 
   const send = async () => {
-    if (!text.trim()) return;
-    const r = await api.prompt(p.id, text.trim());
+    if (!text.trim() || working) return;
+    const prompt = text.trim();
     setText('');
-    setSent(r.note);
-    onChange();
+    setReply('');
+    setWorking(true);
+    setSent(`→ working in ${p.name}…`);
+    try {
+      const r = await api.prompt(p.id, prompt);
+      if (r.live) {
+        setSent('✓ agent replied');
+        setReply(r.reply || '(done — no text reply)');
+      } else {
+        setSent(r.note || 'Prompt recorded (live session control unavailable)');
+      }
+    } catch (e: any) {
+      setSent(e.message);
+    } finally {
+      setWorking(false);
+      onChange();
+    }
   };
   const scan = async () => {
     setBusy('Scanning…');
@@ -268,11 +285,13 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
         {p.lastActive && <span>· active {ago(p.lastActive)}</span>}
       </div>
       <div className="ask">
-        <input placeholder={`Message ${p.name}…`} value={text} onChange={(e) => setText(e.target.value)}
+        <input placeholder={working ? 'agent is working…' : `Message ${p.name}…`} value={text} disabled={working}
+          onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()} aria-label={`Message ${p.name}`} />
-        <button aria-label="Send" onClick={send}><SendIcon /></button>
+        <button aria-label="Send" onClick={send} disabled={working}><SendIcon /></button>
       </div>
-      {sent && <div className="sent">✓ {sent}</div>}
+      {sent && <div className="sent">{sent}</div>}
+      {reply && <div className="reply">{reply}</div>}
       <div className="card-actions">
         <button onClick={scan}>Scan git + chat</button>
         <button onClick={build} disabled={!p.buildCmd} title={p.buildCmd ? p.buildCmd : 'no build command set'}>Run build</button>

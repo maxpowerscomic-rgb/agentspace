@@ -42,7 +42,7 @@ export const api = {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
-    }).then(j<{ ok: boolean; note: string; project: Project }>),
+    }).then(j<{ ok: boolean; live: boolean; reply: string; note?: string }>),
 
   build: (id: string) =>
     fetch(`/api/projects/${id}/build`, { method: 'POST' }).then(

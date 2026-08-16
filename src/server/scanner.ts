@@ -5,7 +5,9 @@ import * as store from './store.js';
 import { commitsSince } from './git.js';
 import { readTranscript } from './transcript.js';
 import { summarizeCommit } from './summarize.js';
+import { enrichSummary } from './session.js';
 import type { Project, Change } from '../types.js';
+import type { GitCommit } from './git.js';
 
 function todayISO(): string {
   const d = new Date();
@@ -27,12 +29,15 @@ export async function scanProject(project: Project): Promise<{ project: Project;
   const commits = await commitsSince(project.repoPath, todayISO());
   const existing = store.getChanges();
   const newChanges: Change[] = [];
+  const commitById = new Map<string, GitCommit>();
 
   for (const c of commits) {
     if (existing.some((x) => x.projectId === project.id && x.commitHash === c.hash)) continue;
     const summary = await summarizeCommit(c, project.name, t.lastAssistantParagraph);
+    const id = randomUUID();
+    commitById.set(id, c);
     newChanges.push({
-      id: randomUUID(),
+      id,
       projectId: project.id,
       timestamp: c.timestamp,
       summary,
@@ -45,5 +50,17 @@ export async function scanProject(project: Project): Promise<{ project: Project;
 
   const added = store.addChanges(newChanges);
   store.upsertProject(project);
+
+  // The query rule (Phase 4): once the changes have landed, optionally ask the
+  // agent for a sharper summary. After-the-fact only — never mid-build.
+  if (project.enrich) {
+    for (const ch of added) {
+      const commit = commitById.get(ch.id);
+      if (!commit) continue;
+      const sharper = await enrichSummary(project, commit);
+      if (sharper) store.updateChange(ch.id, { summary: sharper });
+    }
+  }
+
   return { project, added };
 }

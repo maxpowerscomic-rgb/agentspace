@@ -12,6 +12,7 @@ import { readTranscript } from './transcript.js';
 import { runBuild } from './build.js';
 import { compileThread, formatThread } from './compile.js';
 import { scanProject } from './scanner.js';
+import { sendToSession } from './session.js';
 import { captureApp } from './screenshot.js';
 import { watchProject, unwatchProject, watchEvents } from './watcher.js';
 import { weeklyDigest, computeStreak } from './digest.js';
@@ -133,18 +134,27 @@ export function setupApiRoutes(app: Express): void {
     res.json({ shot, changeId: target?.id });
   });
 
-  // ---- Prompt: record a prompt for a project (routes to its session in Phase 2) ----
-  app.post('/api/projects/:id/prompt', (req: Request, res: Response) => {
+  // ---- Prompt: drive the project's live Claude Code session (Phase 4) ----
+  app.post('/api/projects/:id/prompt', async (req: Request, res: Response) => {
     const project = store.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
     const { text } = req.body ?? {};
     if (!text) return res.status(400).json({ error: 'text is required' });
-    // Phase 1: record intent + surface it as latest context. Real session
-    // routing (writing into the Claude Code session) lands in Phase 2.
+
     project.latestContext = text;
     project.lastActive = new Date().toISOString();
     store.upsertProject(project);
-    res.json({ ok: true, note: 'Prompt recorded. Session routing arrives in Phase 2.', project });
+
+    const reply = await sendToSession(project, text);
+
+    if (reply.available) {
+      // The agent may have committed — scan so today's log reflects it.
+      const fresh = store.getProject(project.id);
+      if (fresh) { try { await scanProject(fresh); } catch { /* non-fatal */ } }
+      return res.json({ ok: true, live: true, reply: reply.text, note: reply.note });
+    }
+    // Graceful fallback: prompt is recorded, live control unavailable.
+    res.json({ ok: true, live: false, reply: '', note: reply.note });
   });
 
   // ---- Build: run the project's build command and update status ----
