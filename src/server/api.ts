@@ -1,166 +1,191 @@
-import express, { Express, Request, Response } from "express";
-import { Server } from "socket.io";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { stateMachine, EntityType } from "./state.js";
-import { getBrowserPage } from "./browser.js";
+// REST API for wiwo. All routes are read-only against user repos; wiwo only
+// mutates its own JSON store.
+import type { Express, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import multer from 'multer';
+import * as store from './store.js';
+import { commitsSince, latestCommitSubject, lastCommitTime, isRepo } from './git.js';
+import { readTranscript } from './transcript.js';
+import { runBuild } from './build.js';
+import { summarizeCommit } from './summarize.js';
+import { compileThread, formatThread } from './compile.js';
+import type { Project, Change, BuildStatus, Platform } from '../types.js';
 
-const upload = multer({ dest: "uploads/" });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = path.resolve(__dirname, '../../uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const upload = multer({ dest: UPLOAD_DIR });
 
-export function setupApiRoutes(app: Express, io: Server) {
-  // Middleware to authenticate agents
-  const authenticateAgent = (req: Request, res: Response, next: express.NextFunction) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: "Missing Authorization header" });
+function todayISO(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+function isToday(iso: string): boolean {
+  return new Date(iso) >= new Date(todayISO());
+}
 
-    const token = authHeader.split(" ")[1];
-    const agentId = Object.keys(stateMachine.agents).find(
-      id => stateMachine.agents[id].apiKey === token
-    );
-
-    if (!agentId) return res.status(403).json({ error: "Invalid API key" });
-    
-    // Attach agentId to request
-    (req as any).agentId = agentId;
-    next();
-  };
-
-  // Agent Join
-  app.post("/api/join", (req: Request, res: Response) => {
-    const { meetingCode, name, webhookUrl } = req.body;
-    
-    if (meetingCode !== stateMachine.meetingCode) {
-      return res.status(403).json({ error: "Invalid meeting code" });
-    }
-
-    // Find an empty slot or update existing
-    let assignedId: string | null = null;
-    if (stateMachine.agents.agent1.apiKey === "agent1-secret") assignedId = "agent1";
-    else if (stateMachine.agents.agent2.apiKey === "agent2-secret") assignedId = "agent2";
-    else return res.status(400).json({ error: "Workspace is full (max 2 agents)" });
-
-    const apiKey = `agent-${Math.random().toString(36).substr(2, 9)}`;
-    
-    stateMachine.updateAgentConfig(assignedId, {
-      name: name || `Agent ${assignedId.replace("agent", "")}`,
-      webhookUrl,
-      apiKey
-    });
-
-    res.json({
-      success: true,
-      agentId: assignedId,
-      apiKey,
-      message: "Successfully joined the workspace. Use the apiKey in the Authorization header as a Bearer token for future requests."
-    });
+export function setupApiRoutes(app: Express): void {
+  // ---- Projects ----
+  app.get('/api/projects', (_req: Request, res: Response) => {
+    const projects = store.getProjects();
+    const changes = store.getChanges();
+    const enriched = projects.map((p) => ({
+      ...p,
+      todayCount: changes.filter((c) => c.projectId === p.id && isToday(c.timestamp)).length,
+    }));
+    res.json(enriched);
   });
 
-  // Polling endpoint for turn status
-  app.get("/api/meetings/:meetingCode/turn", (req: Request, res: Response) => {
-    const { meetingCode } = req.params;
-    
-    if (meetingCode !== stateMachine.meetingCode) {
-      return res.status(403).json({ error: "Invalid meeting code" });
-    }
+  app.post('/api/projects', async (req: Request, res: Response) => {
+    const { name, repoPath, buildCmd, sessionPath } = req.body ?? {};
+    if (!name || !repoPath) return res.status(400).json({ error: 'name and repoPath are required' });
+    if (!isRepo(repoPath)) return res.status(400).json({ error: `Not a git repo: ${repoPath}` });
 
-    res.json({
-      currentTurn: stateMachine.getCurrentTurn(),
-      chatHistory: stateMachine.getChatHistory(),
-      canvasState: stateMachine.getCanvasState()
-    });
+    const t = readTranscript(repoPath, sessionPath);
+    const project: Project = {
+      id: randomUUID(),
+      name,
+      repoPath,
+      sessionPath: t.sessionFile ?? sessionPath,
+      buildCmd,
+      buildStatus: 'unknown',
+      latestContext:
+        t.lastAssistantParagraph ||
+        t.lastUserPrompt ||
+        (await latestCommitSubject(repoPath)) ||
+        'No activity yet',
+      lastActive: t.lastActivity ?? (await lastCommitTime(repoPath)),
+      createdAt: new Date().toISOString(),
+    };
+    store.upsertProject(project);
+    res.status(201).json(project);
   });
 
-  // Turn Completion
-  app.post("/api/turn/complete", authenticateAgent, (req: Request, res: Response) => {
-    const agentId = (req as any).agentId as EntityType;
-    const { message, canvasState } = req.body;
-
-    if (stateMachine.getCurrentTurn() !== agentId) {
-      return res.status(400).json({ error: "Not your turn" });
-    }
-
-    if (message) {
-      stateMachine.addChatMessage(agentId, message);
-    }
-
-    if (canvasState) {
-      stateMachine.updateCanvasState(canvasState);
-    }
-
-    stateMachine.nextTurn();
-    res.json({ success: true });
+  app.delete('/api/projects/:id', (req: Request, res: Response) => {
+    store.deleteProject(req.params.id);
+    res.status(204).end();
   });
 
-  // Canvas Update
-  app.post("/api/canvas/update", authenticateAgent, (req: Request, res: Response) => {
-    const { canvasState } = req.body;
-    if (canvasState) {
-      stateMachine.updateCanvasState(canvasState);
-      res.json({ success: true });
-    } else {
-      res.status(400).json({ error: "Missing canvasState" });
-    }
-  });
+  // ---- Scan: read git + transcript, produce today's changes ----
+  app.post('/api/projects/:id/scan', async (req: Request, res: Response) => {
+    const project = store.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
 
-  // Browser Control
-  app.post("/api/browser/navigate", authenticateAgent, async (req: Request, res: Response) => {
-    const agentId = (req as any).agentId;
-    const { url } = req.body;
-    const page = getBrowserPage(agentId);
+    // Refresh latest context from the transcript (passive read).
+    const t = readTranscript(project.repoPath, project.sessionPath);
+    project.latestContext =
+      t.lastAssistantParagraph || t.lastUserPrompt || project.latestContext;
+    project.lastActive = t.lastActivity ?? project.lastActive;
 
-    if (!page) return res.status(500).json({ error: "Browser not available" });
-
+    let commits;
     try {
-      await page.goto(url, { waitUntil: "networkidle" });
-      res.json({ success: true, title: await page.title() });
+      commits = await commitsSince(project.repoPath, todayISO());
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      return res.status(400).json({ error: e.message });
     }
-  });
 
-  app.post("/api/browser/click", authenticateAgent, async (req: Request, res: Response) => {
-    const agentId = (req as any).agentId;
-    const { selector } = req.body;
-    const page = getBrowserPage(agentId);
-
-    if (!page) return res.status(500).json({ error: "Browser not available" });
-
-    try {
-      await page.click(selector);
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
+    const newChanges: Change[] = [];
+    for (const c of commits) {
+      const existing = store
+        .getChanges()
+        .some((x) => x.projectId === project.id && x.commitHash === c.hash);
+      if (existing) continue;
+      const summary = await summarizeCommit(c, project.name, t.lastAssistantParagraph);
+      newChanges.push({
+        id: randomUUID(),
+        projectId: project.id,
+        timestamp: c.timestamp,
+        summary,
+        filesTouched: c.files,
+        commitHash: c.hash,
+        diff: { added: c.added, removed: c.removed, sample: c.sample },
+        buildStatus: project.buildStatus,
+      });
     }
+    const added = store.addChanges(newChanges);
+    store.upsertProject(project);
+    res.json({ project, added });
   });
 
-  app.post("/api/browser/extract", authenticateAgent, async (req: Request, res: Response) => {
-    const agentId = (req as any).agentId;
-    const { selector } = req.body;
-    const page = getBrowserPage(agentId);
-
-    if (!page) return res.status(500).json({ error: "Browser not available" });
-
-    try {
-      const text = await page.evaluate((sel: string) => {
-        const el = document.querySelector(sel);
-        return el ? el.textContent : null;
-      }, selector || "body");
-      res.json({ success: true, text });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
+  // ---- Prompt: record a prompt for a project (routes to its session in Phase 2) ----
+  app.post('/api/projects/:id/prompt', (req: Request, res: Response) => {
+    const project = store.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    const { text } = req.body ?? {};
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    // Phase 1: record intent + surface it as latest context. Real session
+    // routing (writing into the Claude Code session) lands in Phase 2.
+    project.latestContext = text;
+    project.lastActive = new Date().toISOString();
+    store.upsertProject(project);
+    res.json({ ok: true, note: 'Prompt recorded. Session routing arrives in Phase 2.', project });
   });
 
-  // File Upload
-  app.post("/api/upload", upload.single("file"), (req: Request, res: Response) => {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  // ---- Build: run the project's build command and update status ----
+  app.post('/api/projects/:id/build', async (req: Request, res: Response) => {
+    const project = store.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    if (!project.buildCmd) return res.status(400).json({ error: 'no buildCmd configured' });
 
-    const ext = path.extname(req.file.originalname);
-    const newPath = req.file.path + ext;
-    fs.renameSync(req.file.path, newPath);
-
-    const url = `/uploads/${req.file.filename}${ext}`;
-    res.json({ success: true, url });
+    project.buildStatus = 'building';
+    store.upsertProject(project);
+    const result = await runBuild(project.repoPath, project.buildCmd);
+    project.buildStatus = result.status as BuildStatus;
+    store.upsertProject(project);
+    res.json({ status: result.status, code: result.code, output: result.output });
   });
+
+  // ---- Daily log ----
+  app.get('/api/log', (req: Request, res: Response) => {
+    const dateStr = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+    const changes = store
+      .getChanges()
+      .filter((c) => c.timestamp.slice(0, 10) === dateStr)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    res.json({ date: dateStr, changes });
+  });
+
+  // ---- Update a change (add/edit a user note, attach images) ----
+  app.patch('/api/changes/:id', (req: Request, res: Response) => {
+    const { userNote, beforeImg, afterImg } = req.body ?? {};
+    const patch: Partial<Change> = {};
+    if (userNote !== undefined) patch.userNote = userNote;
+    if (beforeImg !== undefined) patch.beforeImg = beforeImg;
+    if (afterImg !== undefined) patch.afterImg = afterImg;
+    const updated = store.updateChange(req.params.id, patch);
+    if (!updated) return res.status(404).json({ error: 'change not found' });
+    res.json(updated);
+  });
+
+  // ---- Image upload (manual before/after capture) ----
+  app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => {
+    if (!req.file) return res.status(400).json({ error: 'no file' });
+    res.json({ url: `/uploads/${req.file.filename}` });
+  });
+
+  // ---- Compile a shareable thread from a day's changes ----
+  app.post('/api/compile', (req: Request, res: Response) => {
+    const dateStr = (req.body?.date as string) || new Date().toISOString().slice(0, 10);
+    const platform: Platform = (req.body?.platform as Platform) || 'x';
+    const projects = store.getProjects();
+    const changes = store
+      .getChanges()
+      .filter((c) => c.timestamp.slice(0, 10) === dateStr)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const thread = compileThread(projects, changes, platform);
+    res.json({ thread, formatted: formatThread(thread, platform) });
+  });
+
+  // ---- Reformat an existing thread for a platform ----
+  app.post('/api/export', (req: Request, res: Response) => {
+    const { thread, platform } = req.body ?? {};
+    if (!thread || !platform) return res.status(400).json({ error: 'thread and platform required' });
+    res.json({ formatted: formatThread(thread, platform) });
+  });
+
+  app.get('/api/health', (_req, res) => res.json({ ok: true, model: process.env.WIWO_MODEL || 'claude-opus-5' }));
 }
