@@ -13,6 +13,9 @@ export interface Project {
   buildStatus: BuildStatus;
   /** URL of the running app, for Playwright before/after screenshots (Phase 2). */
   appUrl?: string;
+  /** Command that builds+serves the app on $PORT — enables true before/after
+   *  by rendering a past commit in a throwaway git worktree. */
+  serveCmd?: string;
   /** Last paragraph of the project's chat, or its most recent prompt. */
   latestContext: string;
   lastActive?: string; // ISO timestamp
@@ -81,17 +84,25 @@ export interface SavedThread {
 
 /** Stored credentials + status for a connected platform account. */
 export interface SavedConnection {
+  /** Stable id — supports multiple accounts per platform. */
+  id: string;
   platform: Platform;
   /** Display name, e.g. "@maya@fosstodon.org" or "maya.bsky.social". */
   handle: string;
   /** Mastodon instance base URL (Mastodon only). */
   instance?: string;
-  /** Bearer token / access token (Mastodon, X, LinkedIn). */
+  /** Bearer token / access token (Mastodon, X, LinkedIn, Threads). Encrypted at rest. */
   token?: string;
-  /** Bluesky app password. */
+  /** Bluesky app password. Encrypted at rest. */
   appPassword?: string;
-  /** LinkedIn/X author id/urn when required. */
+  /** OAuth refresh token (X, LinkedIn). Encrypted at rest. */
+  refreshToken?: string;
+  /** ISO expiry of the access token, when known. */
+  expiresAt?: string;
+  /** LinkedIn/X/Threads author id/urn when required. */
   authorId?: string;
+  /** The account used by default for this platform. */
+  isDefault?: boolean;
   connectedAt: string;
 }
 

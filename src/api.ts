@@ -2,12 +2,16 @@
 import type { Project, Change, Thread, Platform, SavedThread, PostMode, PostResult } from './types';
 
 export interface Connection {
+  id: string;
   platform: Platform;
   handle: string;
   instance?: string;
+  isDefault: boolean;
   connectedAt: string;
   connected: true;
 }
+
+export const CHAR_LIMITS: Record<Platform, number> = { x: 280, bs: 300, th: 500, ma: 500, li: 3000 };
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -20,7 +24,7 @@ async function j<T>(res: Response): Promise<T> {
 export const api = {
   listProjects: () => fetch('/api/projects').then(j<(Project & { todayCount: number })[]>),
 
-  addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; autoScan?: boolean; enrich?: boolean }) =>
+  addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; serveCmd?: string; autoScan?: boolean; enrich?: boolean }) =>
     fetch('/api/projects', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -131,17 +135,25 @@ export const api = {
       body: JSON.stringify(body),
     }).then(j<Connection>),
 
-  disconnect: (platform: Platform) => fetch(`/api/connections/${platform}`, { method: 'DELETE' }),
+  disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: 'DELETE' }),
+  setDefault: (id: string) => fetch(`/api/connections/${id}/default`, { method: 'POST' }),
 
-  oauthMastodonStart: (instance: string) =>
-    fetch('/api/oauth/mastodon/start', {
+  oauthStatus: () => fetch('/api/oauth/status').then(j<{ ma: boolean; x: boolean; li: boolean }>),
+
+  oauthStart: (platform: Platform, instance?: string) =>
+    fetch(`/api/oauth/${platform}/start`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ instance }),
     }).then(j<{ authUrl: string }>),
 
-  testConnection: (platform: Platform) =>
-    fetch(`/api/connections/${platform}/test`, { method: 'POST' }).then(j<PostResult>),
+  testConnection: (id: string) =>
+    fetch(`/api/connections/${id}/test`, { method: 'POST' }).then(j<PostResult>),
+
+  // ---- Saved threads (drafts / scheduled / posted) ----
+  listThreads: () => fetch('/api/threads').then(j<SavedThread[]>),
+  deleteThread: (id: string) => fetch(`/api/threads/${id}`, { method: 'DELETE' }),
+  postSaved: (id: string) => fetch(`/api/threads/${id}/post`, { method: 'POST' }).then(j<PostResult>),
 };
 
 export interface Digest {

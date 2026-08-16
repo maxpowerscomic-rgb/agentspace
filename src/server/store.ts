@@ -3,7 +3,21 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { encrypt, decrypt } from './crypto.js';
 import type { WiwoData, Project, Change, SavedThread, SavedConnection, Platform } from '../types.js';
+
+const SECRET_FIELDS: (keyof SavedConnection)[] = ['token', 'appPassword', 'refreshToken'];
+
+function encConn(c: SavedConnection): SavedConnection {
+  const out = { ...c };
+  for (const f of SECRET_FIELDS) if (out[f]) (out as any)[f] = encrypt(out[f] as string);
+  return out;
+}
+function decConn(c: SavedConnection): SavedConnection {
+  const out = { ...c };
+  for (const f of SECRET_FIELDS) if (out[f]) (out as any)[f] = decrypt(out[f] as string);
+  return out;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -112,27 +126,53 @@ export function deleteThread(id: string): void {
   write(data);
 }
 
-// ---- Platform connections (native posting) ----
+// ---- Platform connections (native posting, multi-account, encrypted) ----
 export function getConnections(): SavedConnection[] {
-  return read().connections ?? [];
+  return (read().connections ?? []).map(decConn);
 }
 
+export function getConnectionById(id: string): SavedConnection | undefined {
+  const c = (read().connections ?? []).find((x) => x.id === id);
+  return c ? decConn(c) : undefined;
+}
+
+/** The default (or first) connection for a platform. */
 export function getConnection(platform: Platform): SavedConnection | undefined {
-  return (read().connections ?? []).find((c) => c.platform === platform);
+  const list = (read().connections ?? []).filter((c) => c.platform === platform);
+  const chosen = list.find((c) => c.isDefault) ?? list[0];
+  return chosen ? decConn(chosen) : undefined;
 }
 
 export function upsertConnection(conn: SavedConnection): SavedConnection {
   const data = read();
   if (!data.connections) data.connections = [];
-  const i = data.connections.findIndex((c) => c.platform === conn.platform);
-  if (i >= 0) data.connections[i] = conn;
-  else data.connections.push(conn);
+  // First account for a platform becomes its default.
+  const platformCount = data.connections.filter((c) => c.platform === conn.platform && c.id !== conn.id).length;
+  if (platformCount === 0) conn.isDefault = true;
+  const enc = encConn(conn);
+  const i = data.connections.findIndex((c) => c.id === conn.id);
+  if (i >= 0) data.connections[i] = enc;
+  else data.connections.push(enc);
   write(data);
   return conn;
 }
 
-export function deleteConnection(platform: Platform): void {
+export function setDefaultConnection(id: string): void {
   const data = read();
-  data.connections = (data.connections ?? []).filter((c) => c.platform !== platform);
+  const target = (data.connections ?? []).find((c) => c.id === id);
+  if (!target) return;
+  for (const c of data.connections!) if (c.platform === target.platform) c.isDefault = c.id === id;
+  write(data);
+}
+
+export function deleteConnection(id: string): void {
+  const data = read();
+  const removed = (data.connections ?? []).find((c) => c.id === id);
+  data.connections = (data.connections ?? []).filter((c) => c.id !== id);
+  // If we removed the default, promote another account of that platform.
+  if (removed?.isDefault) {
+    const next = data.connections.find((c) => c.platform === removed.platform);
+    if (next) next.isDefault = true;
+  }
   write(data);
 }

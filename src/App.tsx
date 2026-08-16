@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, type FC } from 'react';
-import { api, type Formatted, type Digest, type Connection } from './api';
-import type { Project, Change, Thread, Platform, PostMode } from './types';
+import { api, CHAR_LIMITS, type Formatted, type Digest, type Connection } from './api';
+import type { Project, Change, Thread, Platform, PostMode, SavedThread } from './types';
 
-type View = 'dash' | 'log' | 'thread' | 'digest' | 'connect';
+type View = 'dash' | 'log' | 'thread' | 'digest' | 'connect' | 'history';
 type P = Project & { todayCount?: number };
 
 const SendIcon = () => (
@@ -99,6 +99,10 @@ export default function App() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3v18h18" /><path d="M7 14l3-4 4 3 4-6" /></svg>
             Weekly digest
           </button>
+          <button role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h10" /></svg>
+            Drafts &amp; scheduled
+          </button>
           <button role="tab" aria-selected={view === 'connect'} onClick={() => setView('connect')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M9 12a3 3 0 0 0 3 3l3-3a3 3 0 0 0-4.2-4.2l-.9.9" /><path d="M15 12a3 3 0 0 0-3-3l-3 3a3 3 0 0 0 4.2 4.2l.9-.9" /></svg>
             Connections
@@ -140,6 +144,7 @@ export default function App() {
         {view === 'thread' && <ThreadView onManage={() => setView('connect')} />}
         {view === 'digest' && <DigestView />}
         {view === 'connect' && <ConnectionsView />}
+        {view === 'history' && <HistoryView />}
       </main>
 
       {showAdd && <AddProjectModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); refresh(); }} />}
@@ -521,7 +526,12 @@ function ThreadView({ onManage }: { onManage: () => void }) {
               <div className="ph"><span className="nm">You</span><span className="hd">@you</span><span className="ix">{numbered ? `${i + 2}/${total}` : ''}</span></div>
               <div className="pt" contentEditable suppressContentEditableWarning
                 onBlur={(e) => editPost(i, e.currentTarget.textContent ?? '')}>{p.text}</div>
-              <div className="mt">alt-text auto-written · {p.images.length} image{p.images.length === 1 ? '' : 's'}</div>
+              <div className="mt">
+                <span style={{ color: [...p.text].length > CHAR_LIMITS[platform] ? 'var(--fail)' : 'var(--ink-3)' }}>
+                  {[...p.text].length}/{CHAR_LIMITS[platform]}
+                </span>
+                {' · '}alt-text auto-written · {p.images.length} image{p.images.length === 1 ? '' : 's'}
+              </div>
             </div>
           </div>
         ))}
@@ -544,13 +554,21 @@ function ThreadView({ onManage }: { onManage: () => void }) {
   );
 }
 
+const CONN_META: Record<Platform, { label: string; note: string; fields: ('handle' | 'instance' | 'token' | 'appPassword' | 'authorId')[] }> = {
+  ma: { label: 'Mastodon', note: 'One-click OAuth (just your instance), or paste an access token (scope write:statuses).', fields: ['instance', 'handle', 'token'] },
+  bs: { label: 'Bluesky', note: 'Handle + app password (Settings → App Passwords). No OAuth app needed.', fields: ['handle', 'appPassword'] },
+  x: { label: 'X', note: 'OAuth if you set WIWO_X_CLIENT_ID, otherwise paste a user token with tweet.write.', fields: ['handle', 'token'] },
+  li: { label: 'LinkedIn', note: 'OAuth if you set WIWO_LI_CLIENT_ID, otherwise paste a token + author id.', fields: ['handle', 'token', 'authorId'] },
+  th: { label: 'Threads', note: 'Meta Graph API — user access token + your Threads user id.', fields: ['handle', 'token', 'authorId'] },
+};
+
 function ConnectionsView() {
   const [conns, setConns] = useState<Connection[]>([]);
+  const [oauth, setOauth] = useState<{ ma: boolean; x: boolean; li: boolean }>({ ma: true, x: false, li: false });
   const [status, setStatus] = useState('');
   const load = useCallback(() => api.connections().then(setConns), []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); api.oauthStatus().then(setOauth); }, [load]);
 
-  // Surface the result of an OAuth round-trip (redirected back with ?oauth=…).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const o = params.get('oauth');
@@ -562,30 +580,22 @@ function ConnectionsView() {
     }
   }, []);
 
-  const meta: Record<Platform, { label: string; note: string; fields: ('handle' | 'instance' | 'token' | 'appPassword' | 'authorId')[]; supported: boolean }> = {
-    ma: { label: 'Mastodon', note: 'Works with just an access token — Settings → Development → New application (scope: write:statuses).', fields: ['instance', 'handle', 'token'], supported: true },
-    bs: { label: 'Bluesky', note: 'Works with an app password — Settings → App Passwords. No OAuth app needed.', fields: ['handle', 'appPassword'], supported: true },
-    x: { label: 'X', note: 'Needs a user OAuth 2.0 access token with tweet.write from your own X app.', fields: ['handle', 'token'], supported: true },
-    li: { label: 'LinkedIn', note: 'Needs an access token with w_member_social and your author id (urn:li:person:…) from your own app.', fields: ['handle', 'token', 'authorId'], supported: true },
-    th: { label: 'Threads', note: 'Threads posting needs Meta app review — connect once that is available.', fields: ['handle', 'token'], supported: false },
-  };
+  const flash = (s: string) => { setStatus(s); setTimeout(() => setStatus(''), 6000); };
 
   return (
     <>
       <div className="head">
         <h1>Connections</h1>
-        <p>Connect an account to let wiwo post threads for you (native mode). Credentials stay in your local wiwo store and are never sent to the browser. Prefer to post yourself? You never need any of this — just use Author only.</p>
+        <p>Connect accounts to let wiwo post for you (native mode). Multiple accounts per platform are supported; the ★ default is used when posting. Tokens are encrypted at rest and never sent to the browser. Prefer to post yourself? You never need any of this — just use Author only.</p>
       </div>
       {status && <div className="sent" style={{ marginBottom: 14, wordBreak: 'break-all' }}>{status}</div>}
       <div className="cards">
-        {PLATFORMS.map((pl) => {
-          const m = meta[pl.id];
-          const conn = conns.find((c) => c.platform === pl.id);
-          return (
-            <ConnectionCard key={pl.id} platform={pl.id} meta={m} conn={conn}
-              onChanged={load} onStatus={(s) => { setStatus(s); setTimeout(() => setStatus(''), 6000); }} />
-          );
-        })}
+        {PLATFORMS.map((pl) => (
+          <ConnectionCard key={pl.id} platform={pl.id}
+            accounts={conns.filter((c) => c.platform === pl.id)}
+            oauthAvailable={pl.id === 'ma' ? oauth.ma : pl.id === 'x' ? oauth.x : pl.id === 'li' ? oauth.li : false}
+            onChanged={load} onStatus={flash} />
+        ))}
       </div>
     </>
   );
@@ -593,70 +603,79 @@ function ConnectionsView() {
 
 const ConnectionCard: FC<{
   platform: Platform;
-  meta: { label: string; note: string; fields: string[]; supported: boolean };
-  conn?: Connection;
+  accounts: Connection[];
+  oauthAvailable: boolean;
   onChanged: () => void;
   onStatus: (s: string) => void;
-}> = ({ platform, meta, conn, onChanged, onStatus }) => {
+}> = ({ platform, accounts, oauthAvailable, onChanged, onStatus }) => {
+  const meta = CONN_META[platform];
   const [f, setF] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
-  const labels: Record<string, string> = { handle: 'Handle', instance: 'Instance URL', token: 'Access token', appPassword: 'App password', authorId: 'Author id' };
-  const places: Record<string, string> = { handle: platform === 'bs' ? 'you.bsky.social' : '@you', instance: 'https://fosstodon.org', token: 'paste token', appPassword: 'xxxx-xxxx-xxxx-xxxx', authorId: 'urn:li:person:…' };
+  const labels: Record<string, string> = { handle: 'Handle', instance: 'Instance URL', token: 'Access token', appPassword: 'App password', authorId: platform === 'th' ? 'Threads user id' : 'Author id' };
+  const places: Record<string, string> = { handle: platform === 'bs' ? 'you.bsky.social' : '@you', instance: 'https://fosstodon.org', token: 'paste token', appPassword: 'xxxx-xxxx-xxxx-xxxx', authorId: platform === 'th' ? '178414…' : 'urn:li:person:…' };
 
   const connect = async () => {
     setBusy(true);
     try {
       await api.connect({ platform, handle: f.handle, instance: f.instance, token: f.token, appPassword: f.appPassword, authorId: f.authorId });
-      onStatus(`✓ Connected ${meta.label}`);
-      setF({});
-      onChanged();
+      onStatus(`✓ Connected ${meta.label}`); setF({}); setAdding(false); onChanged();
     } catch (e: any) { onStatus(`⚠ ${e.message}`); }
     setBusy(false);
   };
-  const oauth = async () => {
-    if (!f.instance) { onStatus('⚠ Enter your Mastodon instance URL first'); return; }
+  const startOauth = async () => {
     setBusy(true);
     try {
-      const { authUrl } = await api.oauthMastodonStart(f.instance);
-      window.location.href = authUrl; // hand off to the instance's authorize page
+      if (platform === 'ma' && !f.instance) { onStatus('⚠ Enter your Mastodon instance URL first'); setBusy(false); return; }
+      const { authUrl } = await api.oauthStart(platform, f.instance);
+      window.location.href = authUrl;
     } catch (e: any) { onStatus(`⚠ ${e.message}`); setBusy(false); }
   };
-  const test = async () => {
+  const test = async (id: string) => {
     setBusy(true);
-    try {
-      const r = await api.testConnection(platform);
-      onStatus(`${r.ok ? '✓' : '⚠'} ${r.detail}${r.url ? ` → ${r.url}` : ''}`);
-    } catch (e: any) { onStatus(`⚠ ${e.message}`); }
+    try { const r = await api.testConnection(id); onStatus(`${r.ok ? '✓' : '⚠'} ${r.detail}${r.url ? ` → ${r.url}` : ''}`); }
+    catch (e: any) { onStatus(`⚠ ${e.message}`); }
     setBusy(false);
   };
-  const disconnect = async () => { await api.disconnect(platform); onChanged(); };
+  const makeDefault = async (id: string) => { await api.setDefault(id); onChanged(); };
+  const disconnect = async (id: string) => { await api.disconnect(id); onChanged(); };
+
+  const showForm = adding || accounts.length === 0;
 
   return (
     <div className="card">
       <div className="crow">
         <h3>{meta.label}</h3>
-        {conn
-          ? <span className="pill pass">connected</span>
-          : <span className={`pill ${meta.supported ? 'unknown' : 'unknown'}`}>{meta.supported ? 'not connected' : 'needs app review'}</span>}
+        {accounts.length > 0 && <span className="pill pass">{accounts.length} connected</span>}
       </div>
-      {conn ? (
-        <>
-          <div className="ctx"><span className="lab">Account</span>{conn.handle}{conn.instance ? ` · ${conn.instance}` : ''}</div>
-          <div className="card-actions">
-            <button onClick={test} disabled={busy}>Send test post</button>
-            <button onClick={disconnect} disabled={busy}>Disconnect</button>
-          </div>
-        </>
-      ) : (
+
+      {accounts.map((a) => (
+        <div className="acct" key={a.id}>
+          <button className={`star ${a.isDefault ? 'on' : ''}`} title={a.isDefault ? 'default' : 'make default'} onClick={() => makeDefault(a.id)}>★</button>
+          <span className="acct-h">{a.handle}</span>
+          <button className="mini" onClick={() => test(a.id)} disabled={busy}>test</button>
+          <button className="mini" onClick={() => disconnect(a.id)} disabled={busy}>remove</button>
+        </div>
+      ))}
+
+      {accounts.length > 0 && !adding && (
+        <button className="btn-ghost" style={{ width: '100%' }} onClick={() => setAdding(true)}>+ Add another account</button>
+      )}
+
+      {showForm && (
         <>
           <div className="ctx" style={{ fontSize: 12.5 }}>{meta.note}</div>
           {platform === 'ma' && (
+            <div className="field" style={{ marginBottom: 8 }}>
+              <input placeholder="Instance URL — https://fosstodon.org" value={f.instance ?? ''} onChange={(e) => set('instance', e.target.value)} />
+            </div>
+          )}
+          {oauthAvailable && (
             <>
-              <div className="field" style={{ marginBottom: 8 }}>
-                <input placeholder="Instance URL — https://fosstodon.org" value={f.instance ?? ''} onChange={(e) => set('instance', e.target.value)} />
-              </div>
-              <button className="btn-add" onClick={oauth} disabled={busy || !f.instance}>Connect with Mastodon (OAuth)</button>
+              <button className="btn-add" style={{ width: '100%' }} onClick={startOauth} disabled={busy || (platform === 'ma' && !f.instance)}>
+                Connect with {meta.label} (OAuth)
+              </button>
               <div className="muted" style={{ fontSize: 11, textAlign: 'center', margin: '4px 0' }}>— or paste a token —</div>
             </>
           )}
@@ -667,7 +686,7 @@ const ConnectionCard: FC<{
             </div>
           ))}
           <button className="btn-ghost" onClick={connect} disabled={busy || !f.handle} style={{ width: '100%' }}>
-            {platform === 'ma' ? 'Connect with token instead' : 'Connect'}
+            {oauthAvailable ? 'Connect with token instead' : 'Connect'}
           </button>
         </>
       )}
@@ -675,11 +694,55 @@ const ConnectionCard: FC<{
   );
 };
 
+function HistoryView() {
+  const [threads, setThreads] = useState<SavedThread[]>([]);
+  const [status, setStatus] = useState('');
+  const load = useCallback(() => api.listThreads().then((t) => setThreads(t.slice().reverse())), []);
+  useEffect(() => { load(); }, [load]);
+  const flash = (s: string) => { setStatus(s); setTimeout(() => setStatus(''), 5000); };
+
+  const post = async (id: string) => {
+    try { const r = await api.postSaved(id); flash(`${r.ok ? '✓' : '⚠'} ${r.detail}${r.url ? ` → ${r.url}` : ''}`); load(); }
+    catch (e: any) { flash(`⚠ ${e.message}`); }
+  };
+  const remove = async (id: string) => { await api.deleteThread(id); load(); };
+
+  return (
+    <>
+      <div className="head">
+        <h1>Drafts &amp; scheduled</h1>
+        <p>Everything you've saved or scheduled. Scheduled threads post automatically when their time arrives; you can also post or delete any of them here.</p>
+      </div>
+      {status && <div className="sent" style={{ marginBottom: 14, wordBreak: 'break-all' }}>{status}</div>}
+      {threads.length === 0 ? (
+        <div className="empty"><h3>Nothing saved yet</h3><p className="muted">Compile a thread, then Save draft or Schedule it.</p></div>
+      ) : (
+        threads.map((t) => (
+          <div className="evc" key={t.id} style={{ marginBottom: 12 }}>
+            <div className="evh">
+              <span className={`pill ${t.status === 'posted' ? 'pass' : t.status === 'scheduled' ? 'build' : 'unknown'}`}>{t.status}</span>
+              <span className="sum">{t.thread.date} · {t.thread.platform.toUpperCase()} · {t.mode === 'native' ? 'native' : 'author'}</span>
+              {t.scheduledFor && <span className="muted" style={{ fontSize: 12 }}>⏰ {new Date(t.scheduledFor).toLocaleString()}</span>}
+              <span className="diffstat" style={{ display: 'flex', gap: 6 }}>
+                {t.status !== 'posted' && <button className="mini" onClick={() => post(t.id)}>post now</button>}
+                <button className="mini" onClick={() => remove(t.id)}>delete</button>
+              </span>
+            </div>
+            <div style={{ padding: '0 16px 12px', fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>{t.thread.intro}</div>
+            {t.lastResult && !t.lastResult.ok && <div className="err" style={{ padding: '0 16px 12px' }}>{t.lastResult.detail}</div>}
+          </div>
+        ))
+      )}
+    </>
+  );
+}
+
 function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [buildCmd, setBuildCmd] = useState('');
   const [appUrl, setAppUrl] = useState('');
+  const [serveCmd, setServeCmd] = useState('');
   const [autoScan, setAutoScan] = useState(true);
   const [enrich, setEnrich] = useState(false);
   const [err, setErr] = useState('');
@@ -692,6 +755,7 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
         name: name.trim(), repoPath: repoPath.trim(),
         buildCmd: buildCmd.trim() || undefined,
         appUrl: appUrl.trim() || undefined,
+        serveCmd: serveCmd.trim() || undefined,
         autoScan, enrich,
       });
       onAdded();
@@ -721,6 +785,11 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
           <label>App URL <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></label>
           <input value={appUrl} onChange={(e) => setAppUrl(e.target.value)} placeholder="http://localhost:5173" />
           <span className="hint">for before/after screenshots of the running app</span>
+        </div>
+        <div className="field">
+          <label>Serve command <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></label>
+          <input value={serveCmd} onChange={(e) => setServeCmd(e.target.value)} placeholder="npm run preview" />
+          <span className="hint">builds+serves a past commit on $PORT for true before/after (worktree, read-only)</span>
         </div>
         <label className="checkrow">
           <input type="checkbox" checked={autoScan} onChange={(e) => setAutoScan(e.target.checked)} />

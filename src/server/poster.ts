@@ -10,6 +10,7 @@
 // just writes it and I post it myself".
 import { formatThread } from './compile.js';
 import { postToPlatform } from './native.js';
+import { refreshIfNeeded } from './oauth.js';
 import * as store from './store.js';
 import type { SavedThread, PostResult } from '../types.js';
 
@@ -19,11 +20,19 @@ export async function postThread(saved: SavedThread): Promise<PostResult> {
   const mode = saved.mode ?? 'author';
 
   if (mode === 'native') {
-    const conn = store.getConnection(platform);
+    let conn = store.getConnection(platform);
     if (!conn) {
       return { ok: false, platform, via: 'native', detail: `No ${platform} account connected — connect one or switch to Author only.` };
     }
-    return postToPlatform(platform, formatted.blocks, conn);
+    // Refresh an expiring OAuth token before posting, then persist it.
+    const refreshed = await refreshIfNeeded(conn);
+    if (refreshed !== conn) { store.upsertConnection(refreshed); conn = refreshed; }
+    // Attach the day's before/after screenshots (first post only, poster caps count).
+    const images = store
+      .getChanges()
+      .filter((c) => c.timestamp.slice(0, 10) === saved.thread.date)
+      .flatMap((c) => [c.beforeImg, c.afterImg].filter(Boolean) as string[]);
+    return postToPlatform(platform, formatted.blocks, conn, images);
   }
 
   // Author-only mode.

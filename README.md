@@ -77,6 +77,25 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 - The agent's reply streams **token-by-token** into the project card as it works
   (via the Agent SDK's `includePartialMessages`, over Server-Sent Events).
 
+**Hardening & completeness**
+- **Encrypted secrets at rest** — connection tokens are AES-256-GCM encrypted in
+  `data/wiwo.json` (key from `WIWO_SECRET_KEY` or an auto-generated `data/.key`).
+- **X + LinkedIn OAuth** — one-click connect when you set the app client id/secret
+  env vars (X uses PKCE); pasted tokens still work otherwise. **Token refresh** is
+  automatic before posting when a refresh token is present.
+- **Threads posting** — via the Meta Graph API (token + Threads user id).
+- **Native media** — before/after screenshots are uploaded with the post on
+  Mastodon and Bluesky.
+- **Multiple accounts per platform**, with a ★ default used when posting.
+- **Char-limit validation** — per-platform caps shown live in the composer and
+  enforced before a native post so it can't be rejected for length.
+- **True before/after** — set a project `serveCmd` and wiwo renders the change's
+  parent commit in a throwaway git worktree (read-only) for a real visual diff.
+- **Drafts & scheduled view** — browse, post, or delete saved and scheduled
+  threads; scheduled ones fire automatically.
+- **Tests** — `npm test` runs the pure-logic suite (compile, digest, limits,
+  crypto round-trip).
+
 ## Run locally
 
 **Prerequisites:** Node.js, and local git repos you want to track.
