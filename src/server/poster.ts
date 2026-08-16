@@ -1,44 +1,44 @@
-// Posting layer (Phase 3). Real platform APIs (X, LinkedIn, …) need per-user
-// OAuth, which is a setup step wiwo can't fake. So the honest, genuinely
-// working delivery mechanism is a user-configured outgoing webhook
-// (WIWO_POST_WEBHOOK) — point it at Zapier/Make/n8n or your own poster, and
-// wiwo POSTs the formatted thread there. Without a webhook, "posting" simply
-// marks the thread posted so you can paste the copy yourself.
+// Delivery layer. A thread is delivered one of two ways, chosen by its mode:
+//
+//   'native'  — post to the connected platform account via native.ts (real
+//               APIs, threaded where supported). Requires a connection.
+//   'author'  — author-only: no posting. If WIWO_POST_WEBHOOK is set, hand the
+//               formatted copy to that webhook (Zapier/Make/your own poster);
+//               otherwise just mark it ready for manual paste.
+//
+// The toggle is what lets a user choose between "wiwo posts for me" and "wiwo
+// just writes it and I post it myself".
 import { formatThread } from './compile.js';
-import type { SavedThread } from '../types.js';
-
-export interface PostResult {
-  delivered: boolean;
-  via: 'webhook' | 'manual';
-  detail: string;
-}
+import { postToPlatform } from './native.js';
+import * as store from './store.js';
+import type { SavedThread, PostResult } from '../types.js';
 
 export async function postThread(saved: SavedThread): Promise<PostResult> {
-  const formatted = formatThread(saved.thread, saved.thread.platform);
-  const webhook = process.env.WIWO_POST_WEBHOOK;
+  const platform = saved.thread.platform;
+  const formatted = formatThread(saved.thread, platform);
+  const mode = saved.mode ?? 'author';
 
+  if (mode === 'native') {
+    const conn = store.getConnection(platform);
+    if (!conn) {
+      return { ok: false, platform, via: 'native', detail: `No ${platform} account connected — connect one or switch to Author only.` };
+    }
+    return postToPlatform(platform, formatted.blocks, conn);
+  }
+
+  // Author-only mode.
+  const webhook = process.env.WIWO_POST_WEBHOOK;
   if (webhook) {
     try {
       const res = await fetch(webhook, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          platform: saved.thread.platform,
-          date: saved.thread.date,
-          blocks: formatted.blocks,
-          combined: formatted.combined,
-        }),
+        body: JSON.stringify({ platform, date: saved.thread.date, blocks: formatted.blocks, combined: formatted.combined }),
       });
-      return {
-        delivered: res.ok,
-        via: 'webhook',
-        detail: res.ok ? `Delivered to webhook (${res.status})` : `Webhook returned ${res.status}`,
-      };
+      return { ok: res.ok, platform, via: 'webhook', detail: res.ok ? `Delivered to webhook (${res.status})` : `Webhook returned ${res.status}` };
     } catch (e: any) {
-      return { delivered: false, via: 'webhook', detail: `Webhook error: ${e.message}` };
+      return { ok: false, platform, via: 'webhook', detail: `Webhook error: ${e.message}` };
     }
   }
-
-  // No webhook configured — copy is ready for manual posting.
-  return { delivered: true, via: 'manual', detail: 'Marked posted — copy ready to paste.' };
+  return { ok: true, platform, via: 'manual', detail: 'Marked posted — copy ready to paste.' };
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, type FC } from 'react';
-import { api, type Formatted, type Digest } from './api';
-import type { Project, Change, Thread, Platform } from './types';
+import { api, type Formatted, type Digest, type Connection } from './api';
+import type { Project, Change, Thread, Platform, PostMode } from './types';
 
-type View = 'dash' | 'log' | 'thread' | 'digest';
+type View = 'dash' | 'log' | 'thread' | 'digest' | 'connect';
 type P = Project & { todayCount?: number };
 
 const SendIcon = () => (
@@ -99,6 +99,10 @@ export default function App() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3v18h18" /><path d="M7 14l3-4 4 3 4-6" /></svg>
             Weekly digest
           </button>
+          <button role="tab" aria-selected={view === 'connect'} onClick={() => setView('connect')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M9 12a3 3 0 0 0 3 3l3-3a3 3 0 0 0-4.2-4.2l-.9.9" /><path d="M15 12a3 3 0 0 0-3-3l-3 3a3 3 0 0 0 4.2 4.2l.9-.9" /></svg>
+            Connections
+          </button>
         </div>
         {streak > 0 && (
           <div className="streak" title="Consecutive days shipping">🔥 {streak}-day streak</div>
@@ -133,8 +137,9 @@ export default function App() {
           />
         )}
         {view === 'log' && <DailyLog onCompile={() => setView('thread')} />}
-        {view === 'thread' && <ThreadView />}
+        {view === 'thread' && <ThreadView onManage={() => setView('connect')} />}
         {view === 'digest' && <DigestView />}
+        {view === 'connect' && <ConnectionsView />}
       </main>
 
       {showAdd && <AddProjectModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); refresh(); }} />}
@@ -385,19 +390,26 @@ const LogEntry: FC<{ c: Change; project: string; onSaveNote: (id: string, note: 
 };
 
 const PLATFORMS: { id: Platform; label: string }[] = [
-  { id: 'x', label: 'X' }, { id: 'li', label: 'LinkedIn' }, { id: 'th', label: 'Threads' }, { id: 'ma', label: 'Mastodon' },
+  { id: 'x', label: 'X' }, { id: 'li', label: 'LinkedIn' }, { id: 'th', label: 'Threads' },
+  { id: 'ma', label: 'Mastodon' }, { id: 'bs', label: 'Bluesky' },
 ];
 
-function ThreadView() {
+function ThreadView({ onManage }: { onManage: () => void }) {
   const [platform, setPlatform] = useState<Platform>('x');
   const [thread, setThread] = useState<Thread | null>(null);
   const [fmt, setFmt] = useState<Formatted | null>(null);
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState('');
+  const [mode, setMode] = useState<PostMode>('author');
+  const [conns, setConns] = useState<Connection[]>([]);
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => {
     api.compile('x').then((r) => { setThread(r.thread); setFmt(r.formatted); });
+    api.connections().then(setConns);
   }, []);
+
+  const connected = conns.some((c) => c.platform === platform);
 
   const pick = async (pl: Platform) => {
     setPlatform(pl);
@@ -425,7 +437,7 @@ function ThreadView() {
 
   const saveDraft = async () => {
     if (!thread) return;
-    await api.saveThread({ ...thread, platform });
+    await api.saveThread({ ...thread, platform }, { mode });
     setStatus('Saved as draft');
     setTimeout(() => setStatus(''), 2500);
   };
@@ -435,17 +447,26 @@ function ThreadView() {
     const when = prompt('Schedule for (YYYY-MM-DD HH:MM, local time):');
     if (!when) return;
     const iso = new Date(when.replace(' ', 'T')).toISOString();
-    await api.saveThread({ ...thread, platform }, iso);
-    setStatus(`Scheduled for ${new Date(iso).toLocaleString()}`);
-    setTimeout(() => setStatus(''), 3500);
+    await api.saveThread({ ...thread, platform }, { scheduledFor: iso, mode });
+    setStatus(`Scheduled (${mode === 'native' ? 'native post' : 'author only'}) for ${new Date(iso).toLocaleString()}`);
+    setTimeout(() => setStatus(''), 4000);
   };
 
   const postNow = async () => {
     if (!thread) return;
-    const saved = await api.saveThread({ ...thread, platform });
-    const r = await api.postThread(saved.id);
-    setStatus(r.detail);
-    setTimeout(() => setStatus(''), 3500);
+    setPosting(true);
+    setStatus('');
+    try {
+      const saved = await api.saveThread({ ...thread, platform }, { mode });
+      const r = await api.postThread(saved.id);
+      if (r.ok && r.url) setStatus(`✓ ${r.detail} → ${r.url}`);
+      else setStatus(`${r.ok ? '✓' : '⚠'} ${r.detail}`);
+    } catch (e: any) {
+      setStatus(e.message);
+    } finally {
+      setPosting(false);
+      setTimeout(() => setStatus(''), 6000);
+    }
   };
 
   if (!thread) return <div className="empty"><h3>Nothing to compile yet</h3><p className="muted">Log some changes today, then come back.</p></div>;
@@ -465,12 +486,23 @@ function ThreadView() {
         <p>Written for you, organized by project. Click any line to edit. Pick where it's going and wiwo reshapes it to fit.</p>
       </div>
       <div className="thead">
+        <div className="modeswitch" role="tablist" aria-label="Delivery mode">
+          <button role="tab" aria-selected={mode === 'author'} onClick={() => setMode('author')}>✍️ Author only</button>
+          <button role="tab" aria-selected={mode === 'native'} onClick={() => setMode('native')}>🚀 Post natively</button>
+        </div>
         <div className="segs" role="tablist" aria-label="Platform">
           {PLATFORMS.map((pl) => (
             <button key={pl.id} role="tab" aria-selected={platform === pl.id} onClick={() => pick(pl.id)}>{pl.label}</button>
           ))}
         </div>
       </div>
+      {mode === 'native' && (
+        <div className={`connbar ${connected ? 'ok' : 'warn'}`}>
+          {connected
+            ? <span>✓ Connected — wiwo will post this thread to your {PLATFORMS.find((p) => p.id === platform)?.label} account.</span>
+            : <span>No {PLATFORMS.find((p) => p.id === platform)?.label} account connected. <button className="link" onClick={onManage}>Connect one →</button> or switch to Author only.</span>}
+        </div>
+      )}
       <div className="thread">
         <div className="post">
           <div className="av">D</div>
@@ -498,14 +530,119 @@ function ThreadView() {
         <div className="f">Format: <b>{fmt?.label}</b></div>
         <button className="btn-ghost" onClick={saveDraft}>Save draft</button>
         <button className="btn-ghost" onClick={schedule}>Schedule…</button>
-        <button className="btn-ghost" onClick={postNow}>Post</button>
-        <button onClick={copy} style={{ marginLeft: 0 }}>{copied ? '✓ Copied' : 'Export ↗'}</button>
+        {mode === 'author'
+          ? <button onClick={copy}>{copied ? '✓ Copied' : `Copy for ${PLATFORMS.find((p) => p.id === platform)?.label}`}</button>
+          : <button onClick={postNow} disabled={posting || !connected}>{posting ? 'Posting…' : `Post to ${PLATFORMS.find((p) => p.id === platform)?.label}`}</button>}
       </div>
-      {status && <div className="sent" style={{ marginTop: 10 }}>✓ {status}</div>}
-      <div className="foot">source: Claude Code session + git · edits are saved to your draft</div>
+      {status && <div className="sent" style={{ marginTop: 10, wordBreak: 'break-all' }}>{status}</div>}
+      <div className="foot">
+        {mode === 'author'
+          ? 'Author only — wiwo writes it, you post it. Nothing is sent anywhere.'
+          : 'Native — wiwo posts to your connected account and returns the link.'}
+      </div>
     </>
   );
 }
+
+function ConnectionsView() {
+  const [conns, setConns] = useState<Connection[]>([]);
+  const [status, setStatus] = useState('');
+  const load = useCallback(() => api.connections().then(setConns), []);
+  useEffect(() => { load(); }, [load]);
+
+  const meta: Record<Platform, { label: string; note: string; fields: ('handle' | 'instance' | 'token' | 'appPassword' | 'authorId')[]; supported: boolean }> = {
+    ma: { label: 'Mastodon', note: 'Works with just an access token — Settings → Development → New application (scope: write:statuses).', fields: ['instance', 'handle', 'token'], supported: true },
+    bs: { label: 'Bluesky', note: 'Works with an app password — Settings → App Passwords. No OAuth app needed.', fields: ['handle', 'appPassword'], supported: true },
+    x: { label: 'X', note: 'Needs a user OAuth 2.0 access token with tweet.write from your own X app.', fields: ['handle', 'token'], supported: true },
+    li: { label: 'LinkedIn', note: 'Needs an access token with w_member_social and your author id (urn:li:person:…) from your own app.', fields: ['handle', 'token', 'authorId'], supported: true },
+    th: { label: 'Threads', note: 'Threads posting needs Meta app review — connect once that is available.', fields: ['handle', 'token'], supported: false },
+  };
+
+  return (
+    <>
+      <div className="head">
+        <h1>Connections</h1>
+        <p>Connect an account to let wiwo post threads for you (native mode). Credentials stay in your local wiwo store and are never sent to the browser. Prefer to post yourself? You never need any of this — just use Author only.</p>
+      </div>
+      {status && <div className="sent" style={{ marginBottom: 14, wordBreak: 'break-all' }}>{status}</div>}
+      <div className="cards">
+        {PLATFORMS.map((pl) => {
+          const m = meta[pl.id];
+          const conn = conns.find((c) => c.platform === pl.id);
+          return (
+            <ConnectionCard key={pl.id} platform={pl.id} meta={m} conn={conn}
+              onChanged={load} onStatus={(s) => { setStatus(s); setTimeout(() => setStatus(''), 6000); }} />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+const ConnectionCard: FC<{
+  platform: Platform;
+  meta: { label: string; note: string; fields: string[]; supported: boolean };
+  conn?: Connection;
+  onChanged: () => void;
+  onStatus: (s: string) => void;
+}> = ({ platform, meta, conn, onChanged, onStatus }) => {
+  const [f, setF] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const labels: Record<string, string> = { handle: 'Handle', instance: 'Instance URL', token: 'Access token', appPassword: 'App password', authorId: 'Author id' };
+  const places: Record<string, string> = { handle: platform === 'bs' ? 'you.bsky.social' : '@you', instance: 'https://fosstodon.org', token: 'paste token', appPassword: 'xxxx-xxxx-xxxx-xxxx', authorId: 'urn:li:person:…' };
+
+  const connect = async () => {
+    setBusy(true);
+    try {
+      await api.connect({ platform, handle: f.handle, instance: f.instance, token: f.token, appPassword: f.appPassword, authorId: f.authorId });
+      onStatus(`✓ Connected ${meta.label}`);
+      setF({});
+      onChanged();
+    } catch (e: any) { onStatus(`⚠ ${e.message}`); }
+    setBusy(false);
+  };
+  const test = async () => {
+    setBusy(true);
+    try {
+      const r = await api.testConnection(platform);
+      onStatus(`${r.ok ? '✓' : '⚠'} ${r.detail}${r.url ? ` → ${r.url}` : ''}`);
+    } catch (e: any) { onStatus(`⚠ ${e.message}`); }
+    setBusy(false);
+  };
+  const disconnect = async () => { await api.disconnect(platform); onChanged(); };
+
+  return (
+    <div className="card">
+      <div className="crow">
+        <h3>{meta.label}</h3>
+        {conn
+          ? <span className="pill pass">connected</span>
+          : <span className={`pill ${meta.supported ? 'unknown' : 'unknown'}`}>{meta.supported ? 'not connected' : 'needs app review'}</span>}
+      </div>
+      {conn ? (
+        <>
+          <div className="ctx"><span className="lab">Account</span>{conn.handle}{conn.instance ? ` · ${conn.instance}` : ''}</div>
+          <div className="card-actions">
+            <button onClick={test} disabled={busy}>Send test post</button>
+            <button onClick={disconnect} disabled={busy}>Disconnect</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="ctx" style={{ fontSize: 12.5 }}>{meta.note}</div>
+          {meta.fields.map((k) => (
+            <div className="field" key={k} style={{ marginBottom: 8 }}>
+              <input type={k === 'token' || k === 'appPassword' ? 'password' : 'text'}
+                placeholder={`${labels[k]} — ${places[k]}`} value={f[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+            </div>
+          ))}
+          <button className="btn-add" onClick={connect} disabled={busy || !f.handle}>Connect</button>
+        </>
+      )}
+    </div>
+  );
+};
 
 function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name, setName] = useState('');

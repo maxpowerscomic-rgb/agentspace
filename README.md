@@ -55,6 +55,21 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
   @anthropic-ai/claude-agent-sdk`). Without either, the prompt box gracefully
   falls back to recording the prompt — wiwo still works.
 
+**Native posting (author-vs-post toggle)**
+- Every thread has a mode toggle: **Author only** (default — wiwo writes it, you
+  copy/paste; no account or credential needed) or **Post natively** (wiwo posts
+  to your connected account and returns the permalink).
+- **Connections** — connect an account in the Connections view. Credentials live
+  in your local wiwo store and are never sent to the browser (the API redacts
+  them). Fully working with just user credentials:
+  - **Mastodon** — instance URL + access token; posts a real reply-chain.
+  - **Bluesky** — handle + app password; posts a real reply-chain (AT Protocol).
+  - **X** — user OAuth 2.0 access token (`tweet.write`) from your own app.
+  - **LinkedIn** — access token (`w_member_social`) + author id from your own app.
+  - **Threads** — pending Meta app review.
+- Native posts report per-platform success (with the live link) or a clear
+  failure reason, and scheduled threads post natively when their time arrives.
+
 ## Run locally
 
 **Prerequisites:** Node.js, and local git repos you want to track.

@@ -70,6 +70,7 @@ export function formatThread(thread: Thread, platform: Platform): FormattedThrea
     li: `LinkedIn — single post + carousel`,
     th: `Threads — ${total} short posts`,
     ma: `Mastodon — thread, 500-char posts`,
+    bs: `Bluesky — thread, 300-char posts`,
   };
 
   const blocks: string[] = [];

@@ -145,7 +145,15 @@ main{padding:26px 32px 60px;min-width:0}
 .compile button:hover{filter:brightness(1.05);transform:translateY(-1px)}
 
 /* thread */
-.thead{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.thead{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.modeswitch{display:flex;gap:3px;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:4px}
+.modeswitch button{font-size:13px;font-weight:700;color:var(--ink-2);background:transparent;border:0;padding:7px 15px;border-radius:18px;cursor:pointer;transition:background .14s,color .14s}
+.modeswitch button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.modeswitch button:hover{color:var(--ink)}
+.connbar{font-size:13px;padding:10px 14px;border-radius:11px;margin-bottom:16px}
+.connbar.ok{background:var(--pass-soft);color:var(--pass)}
+.connbar.warn{background:var(--build-soft);color:var(--build)}
+.link{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;padding:0}
 .segs{display:flex;gap:3px;margin-left:auto;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:4px}
 .segs button{font-size:12.5px;font-weight:600;color:var(--ink-2);background:transparent;border:0;padding:6px 13px;border-radius:18px;cursor:pointer;transition:background .14s,color .14s}
 .segs button[aria-selected="true"]{background:var(--brand);color:var(--brand-ink)}

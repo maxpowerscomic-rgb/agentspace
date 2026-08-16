@@ -1,5 +1,13 @@
 // Thin client for the wiwo API.
-import type { Project, Change, Thread, Platform, SavedThread } from './types';
+import type { Project, Change, Thread, Platform, SavedThread, PostMode, PostResult } from './types';
+
+export interface Connection {
+  platform: Platform;
+  handle: string;
+  instance?: string;
+  connectedAt: string;
+  connected: true;
+}
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -75,17 +83,30 @@ export const api = {
 
   digest: () => fetch('/api/digest').then(j<Digest>),
 
-  saveThread: (thread: Thread, scheduledFor?: string) =>
+  saveThread: (thread: Thread, opts?: { scheduledFor?: string; mode?: PostMode }) =>
     fetch('/api/threads', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ thread, scheduledFor }),
+      body: JSON.stringify({ thread, ...opts }),
     }).then(j<SavedThread>),
 
   postThread: (id: string) =>
-    fetch(`/api/threads/${id}/post`, { method: 'POST' }).then(
-      j<{ delivered: boolean; via: string; detail: string }>,
-    ),
+    fetch(`/api/threads/${id}/post`, { method: 'POST' }).then(j<PostResult>),
+
+  // ---- Connections ----
+  connections: () => fetch('/api/connections').then(j<Connection[]>),
+
+  connect: (body: { platform: Platform; handle: string; instance?: string; token?: string; appPassword?: string; authorId?: string }) =>
+    fetch('/api/connections', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(j<Connection>),
+
+  disconnect: (platform: Platform) => fetch(`/api/connections/${platform}`, { method: 'DELETE' }),
+
+  testConnection: (platform: Platform) =>
+    fetch(`/api/connections/${platform}/test`, { method: 'POST' }).then(j<PostResult>),
 };
 
 export interface Digest {

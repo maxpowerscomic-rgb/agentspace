@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { WiwoData, Project, Change, SavedThread } from '../types.js';
+import type { WiwoData, Project, Change, SavedThread, SavedConnection, Platform } from '../types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -109,5 +109,30 @@ export function getThread(id: string): SavedThread | undefined {
 export function deleteThread(id: string): void {
   const data = read();
   data.threads = (data.threads ?? []).filter((t) => t.id !== id);
+  write(data);
+}
+
+// ---- Platform connections (native posting) ----
+export function getConnections(): SavedConnection[] {
+  return read().connections ?? [];
+}
+
+export function getConnection(platform: Platform): SavedConnection | undefined {
+  return (read().connections ?? []).find((c) => c.platform === platform);
+}
+
+export function upsertConnection(conn: SavedConnection): SavedConnection {
+  const data = read();
+  if (!data.connections) data.connections = [];
+  const i = data.connections.findIndex((c) => c.platform === conn.platform);
+  if (i >= 0) data.connections[i] = conn;
+  else data.connections.push(conn);
+  write(data);
+  return conn;
+}
+
+export function deleteConnection(platform: Platform): void {
+  const data = read();
+  data.connections = (data.connections ?? []).filter((c) => c.platform !== platform);
   write(data);
 }

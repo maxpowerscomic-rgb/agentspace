@@ -16,8 +16,9 @@ async function tick(): Promise<void> {
       const result = await postThread(saved);
       store.upsertThread({
         ...saved,
-        status: result.delivered ? 'posted' : 'scheduled',
-        postedAt: result.delivered ? new Date().toISOString() : undefined,
+        status: result.ok ? 'posted' : 'scheduled',
+        postedAt: result.ok ? new Date().toISOString() : undefined,
+        lastResult: result,
         updatedAt: new Date().toISOString(),
       });
     } catch {

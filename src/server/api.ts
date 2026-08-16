@@ -18,7 +18,13 @@ import { watchProject, unwatchProject, watchEvents } from './watcher.js';
 import { weeklyDigest, computeStreak } from './digest.js';
 import { postThread } from './poster.js';
 import { activeProvider } from './providers.js';
-import type { Project, Change, BuildStatus, Platform, SavedThread } from '../types.js';
+import { postToPlatform } from './native.js';
+import type { Project, Change, BuildStatus, Platform, SavedThread, SavedConnection, PostMode } from '../types.js';
+
+/** Strip secrets before sending a connection to the client. */
+function redactConn(c: SavedConnection) {
+  return { platform: c.platform, handle: c.handle, instance: c.instance, connectedAt: c.connectedAt, connected: true };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.resolve(__dirname, '../../uploads');
@@ -231,7 +237,7 @@ export function setupApiRoutes(app: Express): void {
   app.get('/api/threads', (_req: Request, res: Response) => res.json(store.getThreads()));
 
   app.post('/api/threads', (req: Request, res: Response) => {
-    const { thread, scheduledFor } = req.body ?? {};
+    const { thread, scheduledFor, mode } = req.body ?? {};
     if (!thread) return res.status(400).json({ error: 'thread is required' });
     const now = new Date().toISOString();
     const saved: SavedThread = {
@@ -241,6 +247,7 @@ export function setupApiRoutes(app: Express): void {
       updatedAt: now,
       scheduledFor: scheduledFor || undefined,
       status: scheduledFor ? 'scheduled' : 'draft',
+      mode: (mode as PostMode) || 'author',
     };
     store.upsertThread(saved);
     res.status(201).json(saved);
@@ -265,15 +272,50 @@ export function setupApiRoutes(app: Express): void {
     const saved = store.getThread(req.params.id);
     if (!saved) return res.status(404).json({ error: 'thread not found' });
     const result = await postThread(saved);
-    if (result.delivered) {
-      store.upsertThread({ ...saved, status: 'posted', postedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-    }
+    store.upsertThread({
+      ...saved,
+      status: result.ok ? 'posted' : saved.status,
+      postedAt: result.ok ? new Date().toISOString() : saved.postedAt,
+      lastResult: result,
+      updatedAt: new Date().toISOString(),
+    });
     res.json(result);
   });
 
   app.delete('/api/threads/:id', (req: Request, res: Response) => {
     store.deleteThread(req.params.id);
     res.status(204).end();
+  });
+
+  // ---- Platform connections for native posting ----
+  app.get('/api/connections', (_req: Request, res: Response) => {
+    res.json(store.getConnections().map(redactConn));
+  });
+
+  app.post('/api/connections', (req: Request, res: Response) => {
+    const { platform, handle, instance, token, appPassword, authorId } = req.body ?? {};
+    if (!platform || !handle) return res.status(400).json({ error: 'platform and handle are required' });
+    const conn: SavedConnection = {
+      platform, handle, instance, token, appPassword, authorId,
+      connectedAt: new Date().toISOString(),
+    };
+    store.upsertConnection(conn);
+    res.status(201).json(redactConn(conn));
+  });
+
+  app.delete('/api/connections/:platform', (req: Request, res: Response) => {
+    store.deleteConnection(req.params.platform as Platform);
+    res.status(204).end();
+  });
+
+  // Verify a connection by posting a tiny thread of one line — or, safer, by a
+  // credential check. We post a single "wiwo connected ✅" status so the user
+  // sees it work end to end.
+  app.post('/api/connections/:platform/test', async (req: Request, res: Response) => {
+    const conn = store.getConnection(req.params.platform as Platform);
+    if (!conn) return res.status(404).json({ error: 'not connected' });
+    const result = await postToPlatform(conn.platform, ['wiwo connected ✅ (test post)'], conn);
+    res.json(result);
   });
 
   // ---- SSE: push auto-scan events to the dashboard (Phase 2) ----

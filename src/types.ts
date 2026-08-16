@@ -58,7 +58,10 @@ export interface Thread {
   platform: Platform;
 }
 
-export type Platform = 'x' | 'li' | 'th' | 'ma';
+export type Platform = 'x' | 'li' | 'th' | 'ma' | 'bs';
+
+/** How a thread is delivered: author only (copy/export) or posted natively. */
+export type PostMode = 'author' | 'native';
 
 /** A persisted thread the user has edited and/or scheduled (Phase 2/3). */
 export interface SavedThread {
@@ -70,10 +73,43 @@ export interface SavedThread {
   scheduledFor?: string;
   status: 'draft' | 'scheduled' | 'posted';
   postedAt?: string;
+  /** Delivery mode (default 'author'). */
+  mode?: PostMode;
+  /** Result of the last post attempt. */
+  lastResult?: PostResult;
+}
+
+/** Stored credentials + status for a connected platform account. */
+export interface SavedConnection {
+  platform: Platform;
+  /** Display name, e.g. "@maya@fosstodon.org" or "maya.bsky.social". */
+  handle: string;
+  /** Mastodon instance base URL (Mastodon only). */
+  instance?: string;
+  /** Bearer token / access token (Mastodon, X, LinkedIn). */
+  token?: string;
+  /** Bluesky app password. */
+  appPassword?: string;
+  /** LinkedIn/X author id/urn when required. */
+  authorId?: string;
+  connectedAt: string;
+}
+
+/** Outcome of posting a thread to one platform. */
+export interface PostResult {
+  ok: boolean;
+  platform: Platform;
+  via: 'native' | 'webhook' | 'manual';
+  detail: string;
+  /** Permalink of the posted thread's first post, when available. */
+  url?: string;
+  /** Per-post outcomes (native threaded posting). */
+  posts?: { ok: boolean; url?: string; error?: string }[];
 }
 
 export interface WiwoData {
   projects: Project[];
   changes: Change[];
   threads?: SavedThread[];
+  connections?: SavedConnection[];
 }
