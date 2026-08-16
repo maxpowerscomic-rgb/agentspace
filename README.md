@@ -117,3 +117,13 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 
 Your coding agent stays unaware of wiwo. Any summarizer model can slot in behind
 one interface — Claude is the default.
+
+## License
+
+wiwo's own source is MIT licensed — © 2026 Shavon White (@maxpowerscomic). See
+[`LICENSE`](LICENSE).
+
+wiwo is bring-your-own-key and never routes requests through anyone else's
+account. The optional live-session feature uses Anthropic's proprietary
+`@anthropic-ai/claude-agent-sdk` (governed by Anthropic's terms, not MIT) — it's
+an optional dependency and wiwo runs fully without it. See [`NOTICE.md`](NOTICE.md).
