@@ -12,14 +12,14 @@ async function j<T>(res: Response): Promise<T> {
 export const api = {
   listProjects: () => fetch('/api/projects').then(j<(Project & { todayCount: number })[]>),
 
-  addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; autoScan?: boolean }) =>
+  addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; autoScan?: boolean; enrich?: boolean }) =>
     fetch('/api/projects', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then(j<Project>),
 
-  patchProject: (id: string, body: Partial<Pick<Project, 'appUrl' | 'buildCmd' | 'autoScan'>>) =>
+  patchProject: (id: string, body: Partial<Pick<Project, 'appUrl' | 'buildCmd' | 'autoScan' | 'enrich'>>) =>
     fetch(`/api/projects/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

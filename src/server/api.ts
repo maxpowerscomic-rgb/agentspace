@@ -46,7 +46,7 @@ export function setupApiRoutes(app: Express): void {
   });
 
   app.post('/api/projects', async (req: Request, res: Response) => {
-    const { name, repoPath, buildCmd, sessionPath, appUrl, autoScan } = req.body ?? {};
+    const { name, repoPath, buildCmd, sessionPath, appUrl, autoScan, enrich } = req.body ?? {};
     if (!name || !repoPath) return res.status(400).json({ error: 'name and repoPath are required' });
     if (!isRepo(repoPath)) return res.status(400).json({ error: `Not a git repo: ${repoPath}` });
 
@@ -59,6 +59,7 @@ export function setupApiRoutes(app: Express): void {
       buildCmd,
       appUrl,
       autoScan: !!autoScan,
+      enrich: !!enrich,
       buildStatus: 'unknown',
       latestContext:
         t.lastAssistantParagraph ||
@@ -77,9 +78,10 @@ export function setupApiRoutes(app: Express): void {
   app.patch('/api/projects/:id', (req: Request, res: Response) => {
     const project = store.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: 'project not found' });
-    const { appUrl, buildCmd, autoScan } = req.body ?? {};
+    const { appUrl, buildCmd, autoScan, enrich } = req.body ?? {};
     if (appUrl !== undefined) project.appUrl = appUrl;
     if (buildCmd !== undefined) project.buildCmd = buildCmd;
+    if (enrich !== undefined) project.enrich = !!enrich;
     if (autoScan !== undefined) {
       project.autoScan = !!autoScan;
       if (project.autoScan) watchProject(project.id);

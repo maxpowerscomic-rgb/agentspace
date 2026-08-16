@@ -494,6 +494,7 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
   const [buildCmd, setBuildCmd] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [autoScan, setAutoScan] = useState(true);
+  const [enrich, setEnrich] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -504,7 +505,7 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
         name: name.trim(), repoPath: repoPath.trim(),
         buildCmd: buildCmd.trim() || undefined,
         appUrl: appUrl.trim() || undefined,
-        autoScan,
+        autoScan, enrich,
       });
       onAdded();
     } catch (e: any) { setErr(e.message); setBusy(false); }
@@ -537,6 +538,10 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
         <label className="checkrow">
           <input type="checkbox" checked={autoScan} onChange={(e) => setAutoScan(e.target.checked)} />
           <span>Auto-log new commits as they land (recommended)</span>
+        </label>
+        <label className="checkrow">
+          <input type="checkbox" checked={enrich} onChange={(e) => setEnrich(e.target.checked)} />
+          <span>Ask the agent for a sharper summary after each commit</span>
         </label>
         {err && <div className="err">{err}</div>}
         <div className="modal-actions">

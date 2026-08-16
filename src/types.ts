@@ -19,6 +19,10 @@ export interface Project {
   createdAt: string;
   /** Auto-scan on new commits when true (Phase 2 file watcher). */
   autoScan?: boolean;
+  /** Persisted Claude Code session id, so prompts continue the same conversation (Phase 4). */
+  claudeSessionId?: string;
+  /** After a commit lands, query the agent for a sharper summary (Phase 4). */
+  enrich?: boolean;
 }
 
 export interface Change {
