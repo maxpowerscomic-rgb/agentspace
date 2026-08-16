@@ -92,6 +92,73 @@ export async function sendToSession(project: Project, prompt: string): Promise<S
 }
 
 /**
+ * Streaming variant: same as sendToSession but calls onDelta with each text
+ * chunk as the agent produces it (token-by-token). Uses the SDK's
+ * includePartialMessages option; the stream_event → content_block_delta →
+ * text_delta path is the incremental text. Returns the final reply + session id.
+ */
+export async function streamToSession(
+  project: Project,
+  prompt: string,
+  onDelta: (text: string) => void,
+): Promise<SessionReply> {
+  const sdk = await loadSdk();
+  if (!sdk) {
+    return {
+      available: false,
+      text: '',
+      note: 'Live session control needs @anthropic-ai/claude-agent-sdk + ANTHROPIC_API_KEY. Prompt recorded instead.',
+    };
+  }
+
+  let text = '';
+  let sessionId: string | undefined = project.claudeSessionId;
+  try {
+    for await (const message of sdk.query({
+      prompt,
+      options: {
+        cwd: project.repoPath,
+        resume: project.claudeSessionId,
+        model: claudeModel(),
+        permissionMode: PERMISSION_MODE,
+        allowedTools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
+        includePartialMessages: true,
+        maxTurns: 40,
+      },
+    })) {
+      if (message.type === 'system' && message.subtype === 'init') {
+        sessionId = message.session_id;
+      }
+      // Incremental text: accumulate ONLY from stream deltas to avoid
+      // double-counting the full assistant message that also arrives.
+      if (
+        message.type === 'stream_event' &&
+        message.event?.type === 'content_block_delta' &&
+        message.event.delta?.type === 'text_delta'
+      ) {
+        const chunk = message.event.delta.text as string;
+        text += chunk;
+        onDelta(chunk);
+      }
+      if (message.type === 'result') {
+        // Prefer the SDK's final text if we somehow captured nothing.
+        if (!text && message.subtype === 'success') text = message.result;
+        sessionId = message.session_id ?? sessionId;
+        break;
+      }
+    }
+  } catch (e: any) {
+    return { available: true, text, sessionId, note: `Agent error: ${e.message}` };
+  }
+
+  if (sessionId && sessionId !== project.claudeSessionId) {
+    const fresh = store.getProject(project.id);
+    if (fresh) store.upsertProject({ ...fresh, claudeSessionId: sessionId });
+  }
+  return { available: true, text, sessionId };
+}
+
+/**
  * The "query rule": after a commit has ALREADY landed, ask the agent for a
  * sharper one-line summary. Read-only, low turn cap — this never runs during a
  * build, only after the change is settled. Returns null on any failure so the

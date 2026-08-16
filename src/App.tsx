@@ -219,10 +219,10 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
     setWorking(true);
     setSent(`→ working in ${p.name}…`);
     try {
-      const r = await api.prompt(p.id, prompt);
+      const r = await api.promptStream(p.id, prompt, (chunk) => setReply((prev) => prev + chunk));
       if (r.live) {
-        setSent('✓ agent replied');
-        setReply(r.reply || '(done — no text reply)');
+        setSent('✓ agent finished');
+        setReply((prev) => prev || r.reply || '(done — no text reply)');
       } else {
         setSent(r.note || 'Prompt recorded (live session control unavailable)');
       }
@@ -550,6 +550,18 @@ function ConnectionsView() {
   const load = useCallback(() => api.connections().then(setConns), []);
   useEffect(() => { load(); }, [load]);
 
+  // Surface the result of an OAuth round-trip (redirected back with ?oauth=…).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const o = params.get('oauth');
+    if (o === 'ok') setStatus('✓ Connected via OAuth');
+    else if (o === 'error') setStatus(`⚠ OAuth failed: ${params.get('reason') || 'unknown'}`);
+    if (o) {
+      window.history.replaceState({}, '', window.location.pathname + '#connect');
+      setTimeout(() => setStatus(''), 6000);
+    }
+  }, []);
+
   const meta: Record<Platform, { label: string; note: string; fields: ('handle' | 'instance' | 'token' | 'appPassword' | 'authorId')[]; supported: boolean }> = {
     ma: { label: 'Mastodon', note: 'Works with just an access token — Settings → Development → New application (scope: write:statuses).', fields: ['instance', 'handle', 'token'], supported: true },
     bs: { label: 'Bluesky', note: 'Works with an app password — Settings → App Passwords. No OAuth app needed.', fields: ['handle', 'appPassword'], supported: true },
@@ -602,6 +614,14 @@ const ConnectionCard: FC<{
     } catch (e: any) { onStatus(`⚠ ${e.message}`); }
     setBusy(false);
   };
+  const oauth = async () => {
+    if (!f.instance) { onStatus('⚠ Enter your Mastodon instance URL first'); return; }
+    setBusy(true);
+    try {
+      const { authUrl } = await api.oauthMastodonStart(f.instance);
+      window.location.href = authUrl; // hand off to the instance's authorize page
+    } catch (e: any) { onStatus(`⚠ ${e.message}`); setBusy(false); }
+  };
   const test = async () => {
     setBusy(true);
     try {
@@ -631,13 +651,24 @@ const ConnectionCard: FC<{
       ) : (
         <>
           <div className="ctx" style={{ fontSize: 12.5 }}>{meta.note}</div>
-          {meta.fields.map((k) => (
+          {platform === 'ma' && (
+            <>
+              <div className="field" style={{ marginBottom: 8 }}>
+                <input placeholder="Instance URL — https://fosstodon.org" value={f.instance ?? ''} onChange={(e) => set('instance', e.target.value)} />
+              </div>
+              <button className="btn-add" onClick={oauth} disabled={busy || !f.instance}>Connect with Mastodon (OAuth)</button>
+              <div className="muted" style={{ fontSize: 11, textAlign: 'center', margin: '4px 0' }}>— or paste a token —</div>
+            </>
+          )}
+          {meta.fields.filter((k) => !(platform === 'ma' && k === 'instance')).map((k) => (
             <div className="field" key={k} style={{ marginBottom: 8 }}>
               <input type={k === 'token' || k === 'appPassword' ? 'password' : 'text'}
                 placeholder={`${labels[k]} — ${places[k]}`} value={f[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
             </div>
           ))}
-          <button className="btn-add" onClick={connect} disabled={busy || !f.handle}>Connect</button>
+          <button className="btn-ghost" onClick={connect} disabled={busy || !f.handle} style={{ width: '100%' }}>
+            {platform === 'ma' ? 'Connect with token instead' : 'Connect'}
+          </button>
         </>
       )}
     </div>

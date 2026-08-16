@@ -45,12 +45,40 @@ export const api = {
       j<{ project: Project; added: Change[] }>,
     ),
 
-  prompt: (id: string, text: string) =>
-    fetch(`/api/projects/${id}/prompt`, {
+  // Streams the agent's reply token-by-token via SSE. onDelta fires per chunk;
+  // resolves with the final {live, reply, note}.
+  promptStream: async (
+    id: string,
+    text: string,
+    onDelta: (chunk: string) => void,
+  ): Promise<{ live: boolean; reply: string; note?: string }> => {
+    const res = await fetch(`/api/projects/${id}/prompt`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
-    }).then(j<{ ok: boolean; live: boolean; reply: string; note?: string }>),
+    });
+    if (!res.body) return { live: false, reply: '', note: 'no stream' };
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let done: { live: boolean; reply: string; note?: string } = { live: false, reply: '', note: '' };
+    for (;;) {
+      const { value, done: fin } = await reader.read();
+      if (fin) break;
+      buf += decoder.decode(value, { stream: true });
+      const frames = buf.split('\n\n');
+      buf = frames.pop() ?? '';
+      for (const frame of frames) {
+        const ev = /event: (\w+)/.exec(frame)?.[1];
+        const dm = /data: (.*)$/s.exec(frame)?.[1];
+        if (!ev || !dm) continue;
+        const data = JSON.parse(dm);
+        if (ev === 'delta') onDelta(data.chunk);
+        else if (ev === 'done') done = data;
+      }
+    }
+    return done;
+  },
 
   build: (id: string) =>
     fetch(`/api/projects/${id}/build`, { method: 'POST' }).then(
@@ -104,6 +132,13 @@ export const api = {
     }).then(j<Connection>),
 
   disconnect: (platform: Platform) => fetch(`/api/connections/${platform}`, { method: 'DELETE' }),
+
+  oauthMastodonStart: (instance: string) =>
+    fetch('/api/oauth/mastodon/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ instance }),
+    }).then(j<{ authUrl: string }>),
 
   testConnection: (platform: Platform) =>
     fetch(`/api/connections/${platform}/test`, { method: 'POST' }).then(j<PostResult>),

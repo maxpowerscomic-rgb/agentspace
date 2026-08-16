@@ -69,6 +69,13 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
   - **Threads** — pending Meta app review.
 - Native posts report per-platform success (with the live link) or a clear
   failure reason, and scheduled threads post natively when their time arrives.
+- **Mastodon OAuth** — connect with just your instance URL (wiwo registers an
+  app dynamically and runs the authorize → callback → token flow); no token to
+  paste. X/LinkedIn still take a token from your own app.
+
+**Live streaming**
+- The agent's reply streams **token-by-token** into the project card as it works
+  (via the Agent SDK's `includePartialMessages`, over Server-Sent Events).
 
 ## Run locally
 

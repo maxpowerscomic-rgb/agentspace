@@ -47,7 +47,11 @@ async function postMastodon(blocks: string[], conn: SavedConnection): Promise<Po
   for (const status of blocks) {
     const res = await fetch(`${base}/api/v1/statuses`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${conn.token}`, 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${conn.token}`,
+        'content-type': 'application/json',
+        'user-agent': 'wiwo/1.0 (+https://github.com/maxpowerscomic-rgb/agentspace)',
+      },
       body: JSON.stringify({ status, in_reply_to_id: replyTo }),
     });
     if (!res.ok) {

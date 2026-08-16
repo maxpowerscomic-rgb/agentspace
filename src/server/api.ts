@@ -12,14 +12,21 @@ import { readTranscript } from './transcript.js';
 import { runBuild } from './build.js';
 import { compileThread, formatThread } from './compile.js';
 import { scanProject } from './scanner.js';
-import { sendToSession } from './session.js';
+import { streamToSession } from './session.js';
 import { captureApp } from './screenshot.js';
 import { watchProject, unwatchProject, watchEvents } from './watcher.js';
 import { weeklyDigest, computeStreak } from './digest.js';
 import { postThread } from './poster.js';
 import { activeProvider } from './providers.js';
 import { postToPlatform } from './native.js';
+import { startMastodon, completeMastodon, sweepPending } from './oauth.js';
 import type { Project, Change, BuildStatus, Platform, SavedThread, SavedConnection, PostMode } from '../types.js';
+
+function redirectUriFor(req: Request): string {
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+  const host = req.headers.host;
+  return `${proto}://${host}/api/oauth/callback`;
+}
 
 /** Strip secrets before sending a connection to the client. */
 function redactConn(c: SavedConnection) {
@@ -151,16 +158,24 @@ export function setupApiRoutes(app: Express): void {
     project.lastActive = new Date().toISOString();
     store.upsertProject(project);
 
-    const reply = await sendToSession(project, text);
+    // Stream the agent's reply token-by-token over SSE.
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    const reply = await streamToSession(project, text, (chunk) => send('delta', { chunk }));
 
     if (reply.available) {
-      // The agent may have committed — scan so today's log reflects it.
       const fresh = store.getProject(project.id);
       if (fresh) { try { await scanProject(fresh); } catch { /* non-fatal */ } }
-      return res.json({ ok: true, live: true, reply: reply.text, note: reply.note });
+      send('done', { live: true, reply: reply.text, note: reply.note });
+    } else {
+      send('done', { live: false, reply: '', note: reply.note });
     }
-    // Graceful fallback: prompt is recorded, live control unavailable.
-    res.json({ ok: true, live: false, reply: '', note: reply.note });
+    res.end();
   });
 
   // ---- Build: run the project's build command and update status ----
@@ -308,9 +323,41 @@ export function setupApiRoutes(app: Express): void {
     res.status(204).end();
   });
 
-  // Verify a connection by posting a tiny thread of one line — or, safer, by a
-  // credential check. We post a single "wiwo connected ✅" status so the user
-  // sees it work end to end.
+  // ---- Mastodon OAuth: no token pasting (dynamic app registration) ----
+  app.post('/api/oauth/mastodon/start', async (req: Request, res: Response) => {
+    sweepPending();
+    const { instance } = req.body ?? {};
+    if (!instance) return res.status(400).json({ error: 'instance is required' });
+    try {
+      const authUrl = await startMastodon(instance, redirectUriFor(req));
+      res.json({ authUrl });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/oauth/callback', async (req: Request, res: Response) => {
+    const { code, state, error } = req.query as Record<string, string>;
+    if (error) return res.redirect(`/?oauth=error&reason=${encodeURIComponent(error)}#connect`);
+    if (!code || !state) return res.redirect('/?oauth=error&reason=missing_code#connect');
+    try {
+      const auth = await completeMastodon(code, state, redirectUriFor(req));
+      const conn: SavedConnection = {
+        platform: 'ma',
+        handle: auth.handle,
+        instance: auth.instance,
+        token: auth.token,
+        connectedAt: new Date().toISOString(),
+      };
+      store.upsertConnection(conn);
+      res.redirect('/?oauth=ok#connect');
+    } catch (e: any) {
+      res.redirect(`/?oauth=error&reason=${encodeURIComponent(e.message)}#connect`);
+    }
+  });
+
+  // Verify a connection by posting a single "wiwo connected ✅" status so the
+  // user sees it work end to end.
   app.post('/api/connections/:platform/test', async (req: Request, res: Response) => {
     const conn = store.getConnection(req.params.platform as Platform);
     if (!conn) return res.status(404).json({ error: 'not connected' });
