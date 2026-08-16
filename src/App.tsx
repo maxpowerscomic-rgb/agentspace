@@ -41,6 +41,9 @@ export default function App() {
   const [streak, setStreak] = useState(0);
   const [showAdd, setShowAdd] = useState(false);
   const [toast, setToast] = useState('');
+  const [injected, setInjected] = useState<Thread | null>(null);
+
+  const openThread = (t: Thread | null) => { setInjected(t); setView('thread'); };
 
   const refresh = useCallback(async () => {
     try {
@@ -138,10 +141,11 @@ export default function App() {
             projects={projects}
             onAdd={() => setShowAdd(true)}
             onChange={refresh}
+            onRetro={openThread}
           />
         )}
-        {view === 'log' && <DailyLog onCompile={() => setView('thread')} />}
-        {view === 'thread' && <ThreadView onManage={() => setView('connect')} />}
+        {view === 'log' && <DailyLog onCompile={() => openThread(null)} />}
+        {view === 'thread' && <ThreadView onManage={() => setView('connect')} initial={injected} />}
         {view === 'digest' && <DigestView />}
         {view === 'connect' && <ConnectionsView />}
         {view === 'history' && <HistoryView />}
@@ -184,8 +188,8 @@ function DigestView() {
   );
 }
 
-function Dashboard({ greeting, today, projects, onAdd, onChange }: {
-  greeting: string; today: string; projects: P[]; onAdd: () => void; onChange: () => void;
+function Dashboard({ greeting, today, projects, onAdd, onChange, onRetro }: {
+  greeting: string; today: string; projects: P[]; onAdd: () => void; onChange: () => void; onRetro: (t: Thread) => void;
 }) {
   return (
     <>
@@ -202,14 +206,15 @@ function Dashboard({ greeting, today, projects, onAdd, onChange }: {
         </div>
       ) : (
         <div className="cards">
-          {projects.map((p) => <ProjectCard key={p.id} p={p} onChange={onChange} />)}
+          {projects.map((p) => <ProjectCard key={p.id} p={p} onChange={onChange} onRetro={onRetro} />)}
         </div>
       )}
     </>
   );
 }
 
-const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
+const ProjectCard: FC<{ p: P; onChange: () => void; onRetro: (t: Thread) => void }> = ({ p, onChange, onRetro }) => {
+  const [showRetro, setShowRetro] = useState(false);
   const [text, setText] = useState('');
   const [sent, setSent] = useState('');
   const [reply, setReply] = useState('');
@@ -306,8 +311,53 @@ const ProjectCard: FC<{ p: P; onChange: () => void }> = ({ p, onChange }) => {
         <button onClick={scan}>Scan git + chat</button>
         <button onClick={build} disabled={!p.buildCmd} title={p.buildCmd ? p.buildCmd : 'no build command set'}>Run build</button>
         <button onClick={snapshot} disabled={!p.appUrl} title={p.appUrl ? `screenshot ${p.appUrl}` : 'set an app URL to enable'}>Snapshot</button>
+        <button onClick={() => setShowRetro(true)} title="Build a thread from this project's whole history">Retro</button>
       </div>
       {busy && <div className="muted" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{busy}</div>}
+      {showRetro && <RetroModal p={p} onClose={() => setShowRetro(false)} onBuilt={(t) => { setShowRetro(false); onRetro(t); }} />}
+    </div>
+  );
+};
+
+const RetroModal: FC<{ p: P; onClose: () => void; onBuilt: (t: Thread) => void }> = ({ p, onClose, onBuilt }) => {
+  const [window, setWindow] = useState<'day' | 'week' | 'month'>('week');
+  const [since, setSince] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const build = async () => {
+    setErr(''); setBusy(true);
+    try {
+      const r = await api.retro(p.id, window, { since: since || undefined });
+      if (r.empty || !r.thread) { setErr('No commits found in that range.'); setBusy(false); return; }
+      onBuilt(r.thread);
+    } catch (e: any) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Retrospective thread</h2>
+        <p>Turn <b>{p.name}</b>'s whole git history into a thread — one post per time window.</p>
+        <div className="field">
+          <label>Group by</label>
+          <div className="modeswitch" style={{ width: 'fit-content' }}>
+            {(['day', 'week', 'month'] as const).map((w) => (
+              <button key={w} aria-selected={window === w} onClick={() => setWindow(w)}>{w}</button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label>Since <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></label>
+          <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
+          <span className="hint">leave blank for the entire history</span>
+        </div>
+        {err && <div className="err">{err}</div>}
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-add" onClick={build} disabled={busy}>{busy ? 'Building…' : 'Build thread →'}</button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -399,7 +449,7 @@ const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'ma', label: 'Mastodon' }, { id: 'bs', label: 'Bluesky' },
 ];
 
-function ThreadView({ onManage }: { onManage: () => void }) {
+function ThreadView({ onManage, initial }: { onManage: () => void; initial?: Thread | null }) {
   const [platform, setPlatform] = useState<Platform>('x');
   const [thread, setThread] = useState<Thread | null>(null);
   const [fmt, setFmt] = useState<Formatted | null>(null);
@@ -410,9 +460,15 @@ function ThreadView({ onManage }: { onManage: () => void }) {
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
-    api.compile('x').then((r) => { setThread(r.thread); setFmt(r.formatted); });
+    if (initial) {
+      // A retrospective (or other) thread was handed in — use it directly.
+      setThread(initial);
+      api.export(initial, 'x').then((r) => setFmt(r.formatted));
+    } else {
+      api.compile('x').then((r) => { setThread(r.thread); setFmt(r.formatted); });
+    }
     api.connections().then(setConns);
-  }, []);
+  }, [initial]);
 
   const connected = conns.some((c) => c.platform === platform);
 

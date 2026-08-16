@@ -72,6 +72,41 @@ export async function commitsSince(repoPath: string, sinceISO?: string): Promise
   return commits.reverse();
 }
 
+/** Walk history for a retrospective. Optional since/until (ISO) + a max cap. */
+export async function historyCommits(
+  repoPath: string,
+  opts: { since?: string; until?: string; max?: number } = {},
+): Promise<GitCommit[]> {
+  if (!isRepo(repoPath)) throw new Error(`Not a git repo: ${repoPath}`);
+  const SEP = '\x1e';
+  const REC = '\x1f';
+  const fmt = ['%H', '%s', '%b', '%cI'].join(SEP);
+  const args = ['log', `--pretty=format:${fmt}${REC}`, '--no-color'];
+  if (opts.since) args.push(`--since=${opts.since}`);
+  if (opts.until) args.push(`--until=${opts.until}`);
+  if (opts.max) args.push(`-n`, String(opts.max));
+
+  const raw = await git(repoPath, args);
+  const records = raw.split(REC).map((r) => r.trim()).filter(Boolean);
+  const commits: GitCommit[] = [];
+  for (const rec of records) {
+    const [hash, subject, body, cISO] = rec.split(SEP);
+    if (!hash) continue;
+    const { files, added, removed } = await statFor(repoPath, hash);
+    commits.push({
+      hash,
+      subject: subject ?? '',
+      body: (body ?? '').trim(),
+      timestamp: cISO ?? new Date().toISOString(),
+      files,
+      added,
+      removed,
+      sample: '', // omit per-commit diff sample for retros — too heavy over full history
+    });
+  }
+  return commits.reverse(); // oldest first
+}
+
 async function statFor(repoPath: string, hash: string) {
   const out = await git(repoPath, ['show', '--numstat', '--format=', '--no-color', hash]);
   const files: string[] = [];

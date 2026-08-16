@@ -7,7 +7,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import * as store from './store.js';
-import { latestCommitSubject, lastCommitTime, isRepo } from './git.js';
+import { latestCommitSubject, lastCommitTime, isRepo, historyCommits } from './git.js';
+import { buildRetro } from './retro.js';
 import { readTranscript } from './transcript.js';
 import { runBuild } from './build.js';
 import { compileThread, formatThread } from './compile.js';
@@ -238,6 +239,23 @@ export function setupApiRoutes(app: Express): void {
       .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const thread = compileThread(projects, changes, platform);
     res.json({ thread, formatted: formatThread(thread, platform) });
+  });
+
+  // ---- Retrospective: build a thread from a project's git history ----
+  app.post('/api/projects/:id/retro', async (req: Request, res: Response) => {
+    const project = store.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+    const window = (req.body?.window as 'day' | 'week' | 'month') || 'week';
+    const platform: Platform = (req.body?.platform as Platform) || 'x';
+    const { since, until, max } = req.body ?? {};
+    try {
+      const commits = await historyCommits(project.repoPath, { since, until, max: max ?? 2000 });
+      if (commits.length === 0) return res.json({ empty: true, thread: null });
+      const result = await buildRetro(project.name, commits, window, platform);
+      res.json({ ...result, formatted: formatThread(result.thread, platform) });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   // ---- Reformat an existing thread for a platform ----

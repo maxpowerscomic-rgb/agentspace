@@ -106,6 +106,13 @@ export const api = {
       body: JSON.stringify({ platform, date }),
     }).then(j<{ thread: Thread; formatted: Formatted }>),
 
+  retro: (projectId: string, window: 'day' | 'week' | 'month', opts?: { since?: string; platform?: Platform }) =>
+    fetch(`/api/projects/${projectId}/retro`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ window, ...opts }),
+    }).then(j<{ empty?: boolean; thread: Thread | null; windowCount?: number; commitCount?: number }>),
+
   export: (thread: Thread, platform: Platform) =>
     fetch('/api/export', {
       method: 'POST',

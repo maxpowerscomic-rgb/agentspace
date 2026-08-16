@@ -95,6 +95,9 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
   threads; scheduled ones fire automatically.
 - **Tests** — `npm test` runs the pure-logic suite (compile, digest, limits,
   crypto round-trip).
+- **Retrospective threads** — turn a project's whole git history into a thread,
+  bucketed by day / week / month (one post per window, each summarized). Great
+  for backfilling a "here's how it came together" story from an existing repo.
 
 ## Run locally
 
