@@ -18,7 +18,7 @@ import { captureApp, captureCommit } from './screenshot.js';
 import { watchProject, unwatchProject, watchEvents } from './watcher.js';
 import { weeklyDigest, computeStreak } from './digest.js';
 import { postThread } from './poster.js';
-import { activeProvider } from './providers.js';
+import { activeProvider, bridgeEnabled } from './providers.js';
 import { postToPlatform } from './native.js';
 import { startMastodon, startX, startLinkedIn, completeOAuth, sweepPending, xConfigured, liConfigured } from './oauth.js';
 import type { Project, Change, BuildStatus, Platform, SavedThread, SavedConnection, PostMode } from '../types.js';
@@ -428,6 +428,11 @@ export function setupApiRoutes(app: Express): void {
   });
 
   app.get('/api/health', (_req, res) =>
-    res.json({ ok: true, provider: activeProvider(), model: process.env.WIWO_MODEL || 'claude-opus-5' }),
+    res.json({
+      ok: true,
+      provider: activeProvider(),
+      bridge: bridgeEnabled(),
+      model: process.env.WIWO_MODEL || 'claude-opus-5',
+    }),
   );
 }

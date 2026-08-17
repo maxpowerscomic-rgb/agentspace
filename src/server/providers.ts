@@ -2,9 +2,25 @@
 // several providers behind a single interface. Default: Claude. Any provider
 // can slot in via WIWO_PROVIDER; if none is configured, callers fall back to a
 // non-AI heuristic so wiwo always works.
-export type ProviderName = 'anthropic' | 'gemini' | 'openai' | 'none';
+export type ProviderName = 'anthropic' | 'gemini' | 'openai' | 'bridge' | 'none';
+
+/**
+ * "Bridge mode" routes wiwo's AI through your LOCAL Claude Code CLI (`claude -p`)
+ * instead of a raw API key — so it uses whatever auth Claude Code has, including
+ * your Claude Pro/Max subscription login.
+ *
+ * ⚠️ This is for YOUR OWN personal use of your own Claude Code login on your own
+ * machine (ordinary Claude Code usage). Anthropic does NOT permit routing OTHER
+ * people's requests through a subscription — do not run wiwo as a shared/hosted
+ * service in bridge mode on others' behalf. Enable explicitly with
+ * WIWO_AI_MODE=bridge.
+ */
+export function bridgeEnabled(): boolean {
+  return (process.env.WIWO_AI_MODE || '').toLowerCase() === 'bridge';
+}
 
 export function activeProvider(): ProviderName {
+  if (bridgeEnabled()) return 'bridge';
   const explicit = (process.env.WIWO_PROVIDER || '').toLowerCase() as ProviderName;
   if (explicit && ['anthropic', 'gemini', 'openai', 'none'].includes(explicit)) return explicit;
   // Auto-detect from whichever key is present.
@@ -17,6 +33,8 @@ export function activeProvider(): ProviderName {
 /** Generate a short completion, or null if unavailable/failed (caller falls back). */
 export async function generate(prompt: string, maxTokens = 60): Promise<string | null> {
   switch (activeProvider()) {
+    case 'bridge':
+      return bridge(prompt);
     case 'anthropic':
       return anthropic(prompt, maxTokens);
     case 'gemini':
@@ -25,6 +43,25 @@ export async function generate(prompt: string, maxTokens = 60): Promise<string |
       return openai(prompt, maxTokens);
     default:
       return null;
+  }
+}
+
+/** Bridge: shell out to the local Claude Code CLI in headless "print" mode. */
+async function bridge(prompt: string): Promise<string | null> {
+  const bin = process.env.WIWO_CLAUDE_BIN || 'claude';
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const exec = promisify(execFile);
+    // `claude -p` prints a completion using Claude Code's own auth (subscription
+    // login or its own key). No ANTHROPIC_API_KEY required.
+    const { stdout } = await exec(bin, ['-p', prompt, '--output-format', 'text'], {
+      timeout: 60_000,
+      maxBuffer: 1024 * 1024,
+    });
+    return stdout.trim() || null;
+  } catch {
+    return null; // CLI missing / not logged in → caller falls back to heuristic
   }
 }
 

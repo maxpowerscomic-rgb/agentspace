@@ -121,6 +121,19 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 Your coding agent stays unaware of wiwo. Any summarizer model can slot in behind
 one interface — Claude is the default.
 
+## Bridge mode (use your Claude subscription, no API key)
+
+Set `WIWO_AI_MODE=bridge` and wiwo routes its AI through your local Claude Code
+CLI — which can use your Claude Pro/Max login — instead of an API key. Requires
+`claude` installed + `claude login`. **For your own personal use only**, not for
+hosting on others' behalf. See [`docs/bridge-mode.md`](docs/bridge-mode.md).
+
+## Native iOS app (Xcode)
+
+A Capacitor wrapper builds a real iOS app (a thin client to your desktop server):
+`export WIWO_SERVER_URL=… && npm run ios:add && npm run ios:open`, then Run in
+Xcode. See [`docs/ios-native.md`](docs/ios-native.md).
+
 ## Use it on your iPhone
 
 wiwo is an installable PWA. Run the server on your Mac, open its LAN URL on your

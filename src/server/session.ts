@@ -30,7 +30,10 @@ export interface SessionReply {
 }
 
 async function loadSdk(): Promise<any | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+  // Bridge mode uses the local Claude Code login (subscription), so no API key
+  // is required; otherwise we need ANTHROPIC_API_KEY for the Agent SDK.
+  const bridge = (process.env.WIWO_AI_MODE || '').toLowerCase() === 'bridge';
+  if (!process.env.ANTHROPIC_API_KEY && !bridge) return null;
   try {
     // Optional dependency — resolved at runtime only. The typechecker doesn't
     // require it to be installed, so wiwo builds with or without live control.
