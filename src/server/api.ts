@@ -3,6 +3,7 @@
 import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
@@ -424,6 +425,39 @@ export function setupApiRoutes(app: Express): void {
     _req.on('close', () => {
       clearInterval(ping);
       watchEvents.off('scanned', onScan);
+    });
+  });
+
+  // ---- Local folder browser (for the Add-project picker) ----
+  // Read-only directory listing on the machine wiwo runs on. Lists sub-folders
+  // and flags which are git repos, so you can click to a folder instead of
+  // typing an absolute path.
+  app.get('/api/fs/list', (req: Request, res: Response) => {
+    const target = (req.query.path as string) || os.homedir();
+    let entries: { name: string; path: string; isGit: boolean }[] = [];
+    try {
+      const items = fs.readdirSync(target, { withFileTypes: true });
+      entries = items
+        .filter((d) => {
+          try { return d.isDirectory() || (d.isSymbolicLink() && fs.statSync(path.join(target, d.name)).isDirectory()); }
+          catch { return false; }
+        })
+        .filter((d) => !d.name.startsWith('.')) // hide dotfolders (.git, .cache, …)
+        .map((d) => {
+          const full = path.join(target, d.name);
+          return { name: d.name, path: full, isGit: fs.existsSync(path.join(full, '.git')) };
+        })
+        .sort((a, b) => (a.isGit === b.isGit ? a.name.localeCompare(b.name) : a.isGit ? -1 : 1));
+    } catch (e: any) {
+      return res.status(400).json({ error: e.message, path: target });
+    }
+    const parent = path.dirname(target);
+    res.json({
+      path: target,
+      parent: parent === target ? null : parent,
+      home: os.homedir(),
+      isGit: fs.existsSync(path.join(target, '.git')),
+      entries,
     });
   });
 

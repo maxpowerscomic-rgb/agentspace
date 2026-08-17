@@ -793,6 +793,50 @@ function HistoryView() {
   );
 }
 
+const FolderPicker: FC<{ start?: string; onPick: (path: string) => void; onClose: () => void }> = ({ start, onPick, onClose }) => {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.browseFs>> | null>(null);
+  const [err, setErr] = useState('');
+  const go = useCallback((p?: string) => {
+    setErr('');
+    api.browseFs(p).then(setData).catch((e) => setErr(e.message));
+  }, []);
+  useEffect(() => { go(start || undefined); }, [go, start]);
+
+  return (
+    <div className="modal-bg" onClick={onClose} style={{ zIndex: 60 }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <h2>Choose a repo folder</h2>
+        <div className="pathbar">
+          <button className="mini" onClick={() => go(data?.home)} title="Home">⌂</button>
+          <button className="mini" disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)} title="Up">↑</button>
+          <span className="pathnow" title={data?.path}>{data?.path || '…'}</span>
+        </div>
+        {err && <div className="err" style={{ marginBottom: 8 }}>{err}</div>}
+        <div className="fslist">
+          {data?.entries.length === 0 && <div className="muted" style={{ padding: 10 }}>No sub-folders here.</div>}
+          {data?.entries.map((e) => (
+            <div className="fsrow" key={e.path}>
+              <button className="fsnav" onClick={() => go(e.path)} title="Open">
+                <span className="fsicon">{e.isGit ? '📦' : '📁'}</span>
+                <span className="fsname">{e.name}</span>
+                {e.isGit && <span className="gitbadge">git</span>}
+              </button>
+              {e.isGit && <button className="mini" onClick={() => onPick(e.path)}>Use</button>}
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-add" disabled={!data?.isGit} title={data?.isGit ? '' : 'This folder is not a git repo'}
+            onClick={() => data && onPick(data.path)}>
+            Use this folder{data && !data.isGit ? ' (not a git repo)' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
@@ -801,6 +845,7 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
   const [serveCmd, setServeCmd] = useState('');
   const [autoScan, setAutoScan] = useState(true);
   const [enrich, setEnrich] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -828,10 +873,14 @@ function AddProjectModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="notebook-app" autoFocus />
         </div>
         <div className="field">
-          <label>Repo path</label>
-          <input value={repoPath} onChange={(e) => setRepoPath(e.target.value)} placeholder="/home/you/code/notebook-app" />
-          <span className="hint">absolute path to a local git repository</span>
+          <label>Repo folder</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={repoPath} onChange={(e) => setRepoPath(e.target.value)} placeholder="pick or paste a folder" style={{ flex: 1 }} />
+            <button className="btn-ghost" type="button" onClick={() => setBrowsing(true)}>Browse…</button>
+          </div>
+          <span className="hint">a local git repository on this machine</span>
         </div>
+        {browsing && <FolderPicker start={repoPath} onPick={(p) => { setRepoPath(p); if (!name) setName(p.split('/').pop() || ''); setBrowsing(false); }} onClose={() => setBrowsing(false)} />}
         <div className="field">
           <label>Build command <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></label>
           <input value={buildCmd} onChange={(e) => setBuildCmd(e.target.value)} placeholder="npm test" />

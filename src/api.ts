@@ -24,6 +24,11 @@ async function j<T>(res: Response): Promise<T> {
 export const api = {
   listProjects: () => fetch('/api/projects').then(j<(Project & { todayCount: number })[]>),
 
+  browseFs: (path?: string) =>
+    fetch(`/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ''}`).then(
+      j<{ path: string; parent: string | null; home: string; isGit: boolean; entries: { name: string; path: string; isGit: boolean }[] }>,
+    ),
+
   addProject: (body: { name: string; repoPath: string; buildCmd?: string; appUrl?: string; serveCmd?: string; autoScan?: boolean; enrich?: boolean }) =>
     fetch('/api/projects', {
       method: 'POST',
