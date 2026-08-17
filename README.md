@@ -121,6 +121,13 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 Your coding agent stays unaware of wiwo. Any summarizer model can slot in behind
 one interface — Claude is the default.
 
+## Use it on your iPhone
+
+wiwo is an installable PWA. Run the server on your Mac, open its LAN URL on your
+phone (Safari → Add to Home Screen), and you get a home-screen app to review the
+log and post from anywhere — while the desktop keeps watching your repos. Full
+steps (incl. a secure tunnel for off-network use): [`docs/ios.md`](docs/ios.md).
+
 ## License
 
 wiwo's own source is MIT licensed — © 2026 Shavon White (@maxpowerscomic). See

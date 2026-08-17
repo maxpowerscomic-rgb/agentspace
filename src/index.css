@@ -203,8 +203,23 @@ main{padding:26px 32px 60px;min-width:0}
 
 @media (max-width:720px){
   .app{grid-template-columns:1fr}
-  aside{flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px;border-right:0;border-bottom:1px solid var(--line)}
-  .navlist{flex-direction:row}.rail-label,.projlist,.me{display:none}
-  main{padding:20px}
+  aside{position:sticky;top:0;z-index:30;flex-direction:column;align-items:stretch;gap:10px;border-right:0;border-bottom:1px solid var(--line);
+        padding:calc(10px + env(safe-area-inset-top)) 12px 10px;background:color-mix(in srgb,var(--sidebar) 92%,transparent);backdrop-filter:blur(8px)}
+  .logo{padding:0 4px}
+  /* nav becomes a horizontally-scrollable tab strip */
+  .navlist{flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .navlist::-webkit-scrollbar{display:none}
+  .navlist button{white-space:nowrap;flex:0 0 auto;padding:9px 13px}
+  .rail-label,.projlist,.me,.streak{display:none}
+  main{padding:18px 16px calc(28px + env(safe-area-inset-bottom));min-height:0}
+  .cards{grid-template-columns:1fr}
+  h1{font-size:22px}
+  /* comfortable touch targets */
+  .navlist button,.card-actions button,.mini,.segs button,.modeswitch button{min-height:38px}
+  .modal{max-width:none;border-radius:16px}
 }
 @media (max-width:520px){.ba{grid-template-columns:1fr}.compile{flex-wrap:wrap}.compile button{margin-left:0;width:100%}}
+/* Installed (standalone) app: keep clear of the status bar / home indicator */
+@media (display-mode:standalone){
+  body{background:var(--sidebar)}
+}
