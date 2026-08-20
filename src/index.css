@@ -109,8 +109,8 @@ main{padding:26px 32px 60px;min-width:0}
 .auto.on{color:var(--pass);background:var(--pass-soft);border-color:transparent}
 .auto .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
 .auto.on .dot{background:var(--pass);box-shadow:0 0 0 3px color-mix(in srgb,var(--pass) 25%,transparent)}
-.card-actions{display:flex;gap:8px}
-.card-actions button{flex:1;font-size:12px;padding:6px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink-2);cursor:pointer}
+.card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.card-actions button{flex:1 1 0;min-width:88px;font-size:12px;padding:6px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink-2);cursor:pointer;white-space:nowrap}
 .card-actions button:hover{color:var(--ink);border-color:var(--brand)}
 
 /* timeline */
@@ -213,11 +213,12 @@ main{padding:26px 32px 60px;min-width:0}
 
 @media (max-width:720px){
   .app{grid-template-columns:1fr}
-  aside{position:sticky;top:0;z-index:30;flex-direction:column;align-items:stretch;gap:10px;border-right:0;border-bottom:1px solid var(--line);
+  aside{position:sticky;top:0;z-index:30;min-width:0;flex-direction:column;align-items:stretch;gap:10px;border-right:0;border-bottom:1px solid var(--line);
         padding:calc(10px + env(safe-area-inset-top)) 12px 10px;background:color-mix(in srgb,var(--sidebar) 92%,transparent);backdrop-filter:blur(8px)}
   .logo{padding:0 4px}
-  /* nav becomes a horizontally-scrollable tab strip */
-  .navlist{flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  /* nav becomes a horizontally-scrollable tab strip; min-width:0 lets the
+     flex item shrink to the screen so overflow-x actually scrolls it */
+  .navlist{flex-direction:row;min-width:0;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .navlist::-webkit-scrollbar{display:none}
   .navlist button{white-space:nowrap;flex:0 0 auto;padding:9px 13px}
   .rail-label,.projlist,.me,.streak{display:none}
