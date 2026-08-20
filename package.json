@@ -40,9 +40,9 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.1.0",
-    "@capacitor/core": "^6.1.0",
-    "@capacitor/ios": "^6.1.0",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
     "@types/multer": "^2.1.0",
