@@ -12,11 +12,21 @@ export type ProviderName = 'anthropic' | 'gemini' | 'openai' | 'bridge' | 'none'
  * ⚠️ This is for YOUR OWN personal use of your own Claude Code login on your own
  * machine (ordinary Claude Code usage). Anthropic does NOT permit routing OTHER
  * people's requests through a subscription — do not run wiwo as a shared/hosted
- * service in bridge mode on others' behalf. Enable explicitly with
- * WIWO_AI_MODE=bridge.
+ * service in bridge mode on others' behalf.
+ *
+ * Bridge is the DEFAULT: with no API key configured, wiwo uses your local Claude
+ * Code login out of the box. It's overridden when you set an explicit provider
+ * or API key (those are respected instead), and you can force it off with
+ * WIWO_AI_MODE=api.
  */
 export function bridgeEnabled(): boolean {
-  return (process.env.WIWO_AI_MODE || '').toLowerCase() === 'bridge';
+  const mode = (process.env.WIWO_AI_MODE || '').toLowerCase();
+  if (mode === 'bridge') return true; // explicit opt-in
+  if (mode) return false; // any other explicit mode (e.g. WIWO_AI_MODE=api) opts out
+  // No explicit mode → bridge is the default, unless a provider/key is set.
+  if ((process.env.WIWO_PROVIDER || '').toLowerCase()) return false;
+  if (process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY) return false;
+  return true;
 }
 
 export function activeProvider(): ProviderName {

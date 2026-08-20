@@ -121,12 +121,18 @@ See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 Your coding agent stays unaware of wiwo. Any summarizer model can slot in behind
 one interface — Claude is the default.
 
-## Bridge mode (use your Claude subscription, no API key)
+## Bridge mode (use your Claude subscription, no API key) — the default
 
-Set `WIWO_AI_MODE=bridge` and wiwo routes its AI through your local Claude Code
-CLI — which can use your Claude Pro/Max login — instead of an API key. Requires
-`claude` installed + `claude login`. **For your own personal use only**, not for
-hosting on others' behalf. See [`docs/bridge-mode.md`](docs/bridge-mode.md).
+wiwo routes its AI through your local Claude Code CLI — which can use your Claude
+Pro/Max login — instead of an API key. **This is the default**, so there's
+nothing to paste out of the box: just have `claude` installed + `claude login`.
+If you'd rather use a key, set `ANTHROPIC_API_KEY` (or `WIWO_PROVIDER`) and wiwo
+uses that instead; force bridge off entirely with `WIWO_AI_MODE=api`. Bridge is
+**for your own personal use only**, not for hosting on others' behalf. See
+[`docs/bridge-mode.md`](docs/bridge-mode.md).
+
+On first launch a short **onboarding** walkthrough explains what wiwo does and
+how it works; reopen it anytime from **How it works** in the sidebar.
 
 ## Native iOS app (Xcode)
 

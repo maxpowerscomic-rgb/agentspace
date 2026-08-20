@@ -233,3 +233,30 @@ main{padding:26px 32px 60px;min-width:0}
 @media (display-mode:standalone){
   body{background:var(--sidebar)}
 }
+
+/* Sidebar "How it works" reopener */
+.howto{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;padding:8px 11px;border-radius:11px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-3);transition:background .14s,color .14s}
+.howto:hover{background:var(--line-soft);color:var(--ink-2)}
+.howto svg{width:17px;height:17px;flex:none}
+
+/* Onboarding */
+.ob-bg{position:fixed;inset:0;background:rgba(20,22,30,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:70;padding:20px;animation:ob-fade .18s ease}
+@keyframes ob-fade{from{opacity:0}to{opacity:1}}
+.ob{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:34px 30px 24px;width:100%;max-width:440px;text-align:center;animation:ob-rise .22s cubic-bezier(.2,.8,.3,1)}
+@keyframes ob-rise{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+.ob-skip{position:absolute;top:14px;right:16px;background:transparent;border:0;color:var(--ink-3);font-size:13px;font-weight:600;cursor:pointer}
+.ob-skip:hover{color:var(--ink-2)}
+.ob-icon{width:64px;height:64px;margin:4px auto 18px;border-radius:20px;background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center}
+.ob-icon svg{width:30px;height:30px}
+.ob-mark{width:40px;height:40px;border-radius:13px;background:var(--brand);position:relative;box-shadow:0 3px 10px color-mix(in srgb,var(--brand) 45%,transparent)}
+.ob-mark em{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--brand-ink);font-style:normal;font-weight:800;font-size:20px}
+.ob-mark::after{content:"";position:absolute;left:11px;bottom:-4px;width:11px;height:11px;background:var(--brand);border-radius:0 0 3px 11px;transform:rotate(8deg)}
+.ob-title{margin:0 0 8px;font-size:21px;letter-spacing:-.01em}
+.ob-body{color:var(--ink-2);font-size:14.5px;line-height:1.62;min-height:96px}
+.ob-body p{margin:0}
+.ob-body code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 5px;font-size:12.5px}
+.ob-dots{display:flex;gap:7px;justify-content:center;margin:20px 0 22px}
+.ob-dots button{width:7px;height:7px;padding:0;border:0;border-radius:50%;background:var(--line);cursor:pointer;transition:width .2s,background .2s}
+.ob-dots button.on{width:20px;border-radius:4px;background:var(--brand)}
+.ob-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ob-actions .btn-add{min-width:110px}

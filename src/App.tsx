@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type FC } from 'react';
+import { useEffect, useState, useCallback, type FC, type ReactElement } from 'react';
 import { api, CHAR_LIMITS, type Formatted, type Digest, type Connection } from './api';
 import type { Project, Change, Thread, Platform, PostMode, SavedThread } from './types';
 
@@ -35,6 +35,8 @@ function ago(iso?: string) {
   return `${Math.round(h / 24)}d ago`;
 }
 
+const ONBOARD_KEY = 'wiwo.onboarded.v1';
+
 export default function App() {
   const [view, setView] = useState<View>('dash');
   const [projects, setProjects] = useState<P[]>([]);
@@ -42,6 +44,13 @@ export default function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [toast, setToast] = useState('');
   const [injected, setInjected] = useState<Thread | null>(null);
+  const [onboard, setOnboard] = useState(() => {
+    try { return !localStorage.getItem(ONBOARD_KEY); } catch { return true; }
+  });
+  const finishOnboard = () => {
+    try { localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* ignore */ }
+    setOnboard(false);
+  };
 
   const openThread = (t: Thread | null) => { setInjected(t); setView('thread'); };
 
@@ -127,6 +136,10 @@ export default function App() {
             {projects.length === 0 && <span className="muted" style={{ padding: '4px 11px' }}>None yet</span>}
           </div>
         </div>
+        <button className="howto" onClick={() => setOnboard(true)} title="How wiwo works">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 2.5" /><path d="M12 17h.01" /></svg>
+          How it works
+        </button>
         <div className="me">
           <div className="pfp">D</div>
           <div className="who"><b>You</b><span>local workspace</span></div>
@@ -153,6 +166,72 @@ export default function App() {
 
       {showAdd && <AddProjectModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); refresh(); }} />}
       {toast && <div className="toast">✦ {toast}</div>}
+      {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setShowAdd(true); }} />}
+    </div>
+  );
+}
+
+type Slide = { icon: ReactElement; title: string; body: ReactElement };
+
+function Onboarding({ onDone, onAddProject }: { onDone: () => void; onAddProject: () => void }) {
+  const [i, setI] = useState(0);
+  const slides: Slide[] = [
+    {
+      icon: <div className="ob-mark"><em>w</em></div>,
+      title: 'Welcome to wiwo',
+      body: <p><b>What I worked on</b> — a build log that writes itself. wiwo watches your coding
+        work and turns it into a shareable progress thread, so you can build more and market less.</p>,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 3v12" /><circle cx="6" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9c0 4-6 3-6 8" /></svg>,
+      title: 'It just watches',
+      body: <p>Point wiwo at your local git repos. It reads <b>git commits</b> and your{' '}
+        <b>Claude Code sessions</b> — strictly read-only. It never writes to your code and never
+        interrupts your agent mid-build.</p>,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M4 4h16v16H4z" /><path d="M8 9h8M8 13h5" /></svg>,
+      title: 'Your daily log, automatically',
+      body: <p>Every commit becomes a plain-English log entry, summarized for you. Add an optional
+        one-line note or a before/after screenshot when you want — otherwise it's hands-off.</p>,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
+      title: 'One press → a shareable thread',
+      body: <p>Compile the day (or a whole repo's history) into a thread, organized by project and
+        reshaped for X, LinkedIn, Threads, Mastodon, or Bluesky. Copy it, or post natively from a
+        connected account.</p>,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 12a3 3 0 0 0 3 3l3-3a3 3 0 0 0-4.2-4.2l-.9.9" /><path d="M15 12a3 3 0 0 0-3-3l-3 3a3 3 0 0 0 4.2 4.2l.9-.9" /></svg>,
+      title: 'Linked to your Claude — no API key',
+      body: <p>wiwo runs in <b>bridge mode</b> by default: it uses your local Claude Code login for
+        summaries and the prompt box, so there's <b>nothing to paste and no extra bill</b>. Just have{' '}
+        <code>claude</code> installed and logged in. (Prefer a key? Set one and wiwo uses it instead.)</p>,
+    },
+  ];
+  const last = i === slides.length - 1;
+  const s = slides[i];
+
+  return (
+    <div className="ob-bg" onClick={onDone}>
+      <div className="ob" onClick={(e) => e.stopPropagation()}>
+        <button className="ob-skip" onClick={onDone}>Skip</button>
+        <div className="ob-icon">{s.icon}</div>
+        <h2 className="ob-title">{s.title}</h2>
+        <div className="ob-body">{s.body}</div>
+        <div className="ob-dots">
+          {slides.map((_, k) => (
+            <button key={k} className={k === i ? 'on' : ''} aria-label={`Slide ${k + 1}`} onClick={() => setI(k)} />
+          ))}
+        </div>
+        <div className="ob-actions">
+          {i > 0 ? <button className="btn-ghost" onClick={() => setI(i - 1)}>Back</button> : <span />}
+          {last
+            ? <button className="btn-add" onClick={onAddProject}>Add your first project</button>
+            : <button className="btn-add" onClick={() => setI(i + 1)}>Next</button>}
+        </div>
+      </div>
     </div>
   );
 }
