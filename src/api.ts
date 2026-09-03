@@ -1,5 +1,7 @@
 // Thin client for the wiwo API.
-import type { Project, Change, Thread, Platform, SavedThread, PostMode, PostResult } from './types';
+import type { Project, Change, Thread, Platform, SavedThread, PostMode, PostResult, Session } from './types';
+
+export type SessionView = (Session & { remainingSec: number }) | null;
 
 export interface Connection {
   id: string;
@@ -161,6 +163,33 @@ export const api = {
 
   testConnection: (id: string) =>
     fetch(`/api/connections/${id}/test`, { method: 'POST' }).then(j<PostResult>),
+
+  // ---- v2: focus sessions ----
+  getSession: () => fetch('/api/session').then(j<SessionView>),
+
+  startSession: (body: { projectId: string; title: string; intervalMin?: number }) =>
+    fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<SessionView>),
+
+  scanSprint: (id: string) =>
+    fetch(`/api/session/${id}/scan`).then(j<{ line: string; commits: string[]; count: number }>),
+
+  checkin: (id: string, body: { line?: string; auto?: boolean; altProjectId?: string; skipped?: boolean; commits?: string[]; action: 'continue' | 'end' }) =>
+    fetch(`/api/session/${id}/checkin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<any>),
+
+  endSession: (id: string, line?: string) =>
+    fetch(`/api/session/${id}/end`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ line }) }).then(j<any>),
+
+  sessionThread: (id: string, platform: Platform = 'x') =>
+    fetch(`/api/session/${id}/thread?platform=${platform}`).then(j<{ thread: Thread; formatted: Formatted }>),
+
+  publishSession: (id: string, body: { platform: Platform; mode: PostMode; sprintId?: string }) =>
+    fetch(`/api/session/${id}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<{ saved: SavedThread; result: PostResult; formatted: Formatted }>),
+
+  // ---- Web Push ----
+  pushKey: () => fetch('/api/push/key').then(j<{ key: string | null }>),
+  pushSubscribe: (sub: unknown) =>
+    fetch('/api/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub) }).then(j<{ ok: boolean }>),
+  pushTest: () => fetch('/api/push/test', { method: 'POST' }).then(j<{ sent: number; pruned: number }>),
 
   // ---- Saved threads (drafts / scheduled / posted) ----
   listThreads: () => fetch('/api/threads').then(j<SavedThread[]>),

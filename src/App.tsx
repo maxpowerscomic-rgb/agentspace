@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, type FC, type ReactElement } from 'react';
 import { api, CHAR_LIMITS, type Formatted, type Digest, type Connection } from './api';
 import type { Project, Change, Thread, Platform, PostMode, SavedThread } from './types';
+import { FocusApp } from './Focus';
 
 type View = 'dash' | 'log' | 'thread' | 'digest' | 'connect' | 'history';
 type P = Project & { todayCount?: number };
@@ -44,6 +45,7 @@ export default function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [toast, setToast] = useState('');
   const [injected, setInjected] = useState<Thread | null>(null);
+  const [surface, setSurface] = useState<'focus' | 'library'>('focus');
   const [onboard, setOnboard] = useState(() => {
     try { return !localStorage.getItem(ONBOARD_KEY); } catch { return true; }
   });
@@ -87,6 +89,15 @@ export default function App() {
   })();
   const today = new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 
+  if (surface === 'focus') {
+    return (
+      <>
+        <FocusApp onOpenLibrary={() => setSurface('library')} />
+        {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setSurface('library'); setShowAdd(true); }} />}
+      </>
+    );
+  }
+
   return (
     <div className="app">
       <aside>
@@ -94,6 +105,11 @@ export default function App() {
           <div className="mark"><span>w</span></div>
           <div className="name"><em>wiwo</em></div>
         </div>
+        <button className="backfocus" onClick={() => setSurface('focus')} title="Back to focus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M15 18l-6-6 6-6" /></svg>
+          Focus
+        </button>
+        <div className="rail-label" style={{ paddingTop: 0 }}>Library</div>
         <div className="navlist" role="tablist" aria-label="Views">
           <button role="tab" aria-selected={view === 'dash'} onClick={() => setView('dash')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
