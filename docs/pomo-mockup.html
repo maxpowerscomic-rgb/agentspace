@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wiwo v2 — log and keep going (mockups)</title>
+<style>
+  :root{
+    --bg:#f6f5f2; --panel:#fff; --line:#eae7e1; --line-soft:#f0ede8;
+    --ink:#23262e; --ink-2:#6b6f78; --ink-3:#a3a7b0;
+    --brand:#4c6fff; --brand-ink:#fff; --brand-soft:#eef1ff;
+    --green:#1fa97c; --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:var(--sans);color:var(--ink);padding:48px 32px;-webkit-font-smoothing:antialiased}
+  header{max-width:1080px;margin:0 auto 36px}
+  header .mark{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
+  header .mk{width:30px;height:30px;border-radius:10px;background:var(--brand);position:relative}
+  header .mk::after{content:"";position:absolute;left:8px;bottom:-3px;width:8px;height:8px;background:var(--brand);border-radius:0 0 3px 8px;transform:rotate(8deg)}
+  header .mk span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px}
+  header h1{margin:14px 0 4px;font-size:26px;letter-spacing:-.02em}
+  header p{margin:0;color:var(--ink-2);font-size:15px;max-width:64ch}
+  .row{display:flex;gap:36px;flex-wrap:wrap;justify-content:center;max-width:1400px;margin:0 auto}
+  figure{margin:0;display:flex;flex-direction:column;gap:14px;align-items:center}
+  figcaption{font-size:13px;color:var(--ink-2);text-align:center;max-width:340px;line-height:1.5}
+  figcaption b{color:var(--ink);display:block;font-size:14px;margin-bottom:2px}
+  .phone{width:340px;height:700px;background:var(--panel);border:1px solid var(--line);border-radius:38px;
+         box-shadow:0 2px 8px rgba(30,34,45,.06),0 24px 48px rgba(30,34,45,.09);
+         padding:22px 24px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .statusbar{height:18px;display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-3);font-family:var(--mono);flex:none;margin-bottom:8px}
+
+  /* ------- 1 · START ------- */
+  .menu{position:absolute;top:44px;right:22px;color:var(--ink-3);font-size:20px;letter-spacing:2px}
+  .start{flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px}
+  .start h2{margin:0;font-size:27px;line-height:1.22;letter-spacing:-.02em;font-weight:800}
+  .taskline{border:0;border-bottom:2px solid var(--brand);font-size:20px;padding:8px 2px;color:var(--ink);background:transparent;font-weight:600}
+  .taskline .caret{color:var(--brand);animation:none}
+  .chips{display:flex;gap:8px}
+  .chip{font-size:13px;font-weight:600;color:var(--ink-2);background:var(--bg);border:1px solid var(--line);border-radius:18px;padding:7px 13px}
+  .chip.b{color:var(--brand);background:var(--brand-soft);border-color:transparent}
+  .go{margin-top:8px;background:var(--brand);color:#fff;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:700;box-shadow:0 6px 18px color-mix(in srgb,var(--brand) 35%,transparent)}
+  .start .hint{font-size:12.5px;color:var(--ink-3);text-align:center}
+
+  /* ------- 2 · FOCUS ------- */
+  .focus{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  .focus .task{font-size:14px;font-weight:600;color:var(--ink-2)}
+  .focus .proj{font-size:12px;color:var(--ink-3)}
+  .ring{width:220px;height:220px;margin:26px 0 18px;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .t{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .t b{font-size:46px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .ring .t span{font-size:12px;color:var(--ink-3);margin-top:2px}
+  .ticks{display:flex;flex-direction:column;gap:9px;width:100%;padding:0 8px}
+  .tick{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--ink-2)}
+  .tick .c{width:16px;height:16px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:10px;display:flex;align-items:center;justify-content:center;flex:none}
+  .tick time{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
+  .endbtn{margin-top:auto;text-align:center;color:var(--ink-3);font-size:14px;font-weight:600;padding:10px}
+
+  /* ------- 3 · CHECK-IN ------- */
+  .checkin{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px}
+  .checkin .when{font-size:13px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.08em}
+  .checkin h2{margin:0;font-size:26px;letter-spacing:-.02em;line-height:1.25}
+  .noticed{background:var(--brand-soft);border-radius:14px;padding:12px 14px;font-size:13px;color:var(--ink-2)}
+  .noticed b{color:var(--brand);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+  .entry{border:1.5px solid var(--line);border-radius:14px;padding:14px;font-size:15.5px;line-height:1.45;color:var(--ink);min-height:76px}
+  .entry .edit{color:var(--ink-3);font-size:12px;float:right}
+  .logbtn{background:var(--brand);color:#fff;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:700}
+  .skip{text-align:center;color:var(--ink-3);font-size:13.5px;font-weight:600}
+
+  /* ------- 4 · RECAP ------- */
+  .recap{flex:1;display:flex;flex-direction:column;gap:16px;padding-top:14px}
+  .recap .done{font-size:13px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.08em}
+  .recap h2{margin:0;font-size:24px;letter-spacing:-.02em}
+  .recap .meta{font-size:13px;color:var(--ink-3)}
+  .chunks{display:flex;flex-direction:column;gap:0;margin:4px 0}
+  .chunk{display:flex;gap:11px;font-size:13.5px;color:var(--ink-2);padding:7px 0;position:relative}
+  .chunk::before{content:"";position:absolute;left:5.5px;top:22px;bottom:-8px;width:1.5px;background:var(--line)}
+  .chunk:last-child::before{display:none}
+  .chunk .d{width:12px;height:12px;border-radius:50%;background:var(--brand);flex:none;margin-top:3px}
+  .thread{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:14px;font-size:13.5px;line-height:1.5;color:var(--ink)}
+  .thread b{display:block;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+  .thread .more{color:var(--ink-3);font-size:12px;margin-top:6px}
+  .pub{background:var(--brand);color:#fff;border-radius:16px;padding:15px;text-align:center;font-size:15.5px;font-weight:700;margin-top:auto}
+  .alt{display:flex;justify-content:center;gap:22px;font-size:13px;color:var(--ink-3);font-weight:600;padding-bottom:2px}
+
+  /* ------- 5 · NOTIFICATION ------- */
+  .lock{flex:1;display:flex;flex-direction:column;align-items:center;background:linear-gradient(160deg,#20242e,#101218);margin:-22px -24px;padding:22px 20px;border-radius:37px}
+  .lock .clock{color:#fff;font-size:64px;font-weight:200;margin-top:64px;letter-spacing:-.02em}
+  .lock .date{color:#ffffff88;font-size:15px;margin-top:2px}
+  .notif{margin-top:46px;width:100%;background:#ffffffee;backdrop-filter:blur(10px);border-radius:18px;padding:13px 14px;display:flex;gap:11px;align-items:flex-start}
+  .notif .icon{width:34px;height:34px;border-radius:9px;background:var(--brand);flex:none;position:relative}
+  .notif .icon::after{content:"w";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px}
+  .notif .tx{font-size:13px;line-height:1.4;color:var(--ink)}
+  .notif .tx b{display:block;font-size:13.5px}
+  .notif .tx span{color:var(--ink-2)}
+  .notif .ago{margin-left:auto;font-size:11px;color:var(--ink-3);flex:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="mark"><div class="mk"><span>w</span></div> wiwo v2</div>
+  <h1>Log and keep going</h1>
+  <p>Set a task. Work. Every interval, wiwo asks one question — and usually answers it
+     for you. At the end, your session is already a publishable thread. One screen,
+     one job, one action — everything else lives behind “⋯”.</p>
+</header>
+
+<div class="row">
+
+  <!-- 1 · START -->
+  <figure>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+      <div class="menu">⋯</div>
+      <div class="start">
+        <h2>What are you<br/>working on?</h2>
+        <div class="taskline">Ship dark mode<span class="caret">|</span></div>
+        <div class="chips">
+          <span class="chip b">notebook-app ▾</span>
+          <span class="chip">30 min ▾</span>
+        </div>
+        <div class="go">Start</div>
+        <div class="hint">wiwo will check in every 30 minutes</div>
+      </div>
+    </div>
+    <figcaption><b>1 · Start</b>One sentence, two defaults, one button. Projects,
+      history, connections — all behind ⋯.</figcaption>
+  </figure>
+
+  <!-- 2 · FOCUS -->
+  <figure>
+    <div class="phone">
+      <div class="statusbar"><span>10:07</span><span>●●●</span></div>
+      <div class="focus">
+        <div class="task">Ship dark mode</div>
+        <div class="proj">notebook-app · interval 2 of ∞</div>
+        <div class="ring">
+          <svg width="220" height="220" viewBox="0 0 220 220">
+            <circle cx="110" cy="110" r="100" fill="none" stroke="var(--line-soft)" stroke-width="7"/>
+            <circle cx="110" cy="110" r="100" fill="none" stroke="var(--brand)" stroke-width="7"
+                    stroke-linecap="round" stroke-dasharray="628" stroke-dashoffset="170"/>
+          </svg>
+          <div class="t"><b>21:48</b><span>until check-in</span></div>
+        </div>
+        <div class="ticks">
+          <div class="tick"><span class="c">✓</span><time>9:37</time> Scaffolded the settings panel</div>
+          <div class="tick"><span class="c">✓</span><time>10:07</time> Wired theme toggle to storage</div>
+        </div>
+        <div class="endbtn">End session</div>
+      </div>
+    </div>
+    <figcaption><b>2 · Focus</b>The timer is the interface. Logged chunks collect
+      quietly as ticks. Nothing asks for attention.</figcaption>
+  </figure>
+
+  <!-- 3 · CHECK-IN -->
+  <figure>
+    <div class="phone">
+      <div class="statusbar"><span>10:30</span><span>●●●</span></div>
+      <div class="checkin">
+        <div class="when">Check-in · 30 min</div>
+        <h2>What happened?</h2>
+        <div class="noticed"><b>wiwo noticed</b>2 commits on notebook-app —
+          full-text search · dark-mode flash fix</div>
+        <div class="entry"><span class="edit">edit</span>Added instant full-text search
+          with highlighting, and fixed the dark-mode flash on first paint.</div>
+        <div class="logbtn">Log it → keep going</div>
+        <div class="skip">skip this one</div>
+      </div>
+    </div>
+    <figcaption><b>3 · Check-in</b>The heart of the app. Pre-written from the
+      changelog when possible — approve in one tap, ≤5 seconds, back to work.</figcaption>
+  </figure>
+
+  <!-- 4 · RECAP -->
+  <figure>
+    <div class="phone">
+      <div class="statusbar"><span>12:12</span><span>●●●</span></div>
+      <div class="recap">
+        <div class="done">Session complete</div>
+        <h2>Ship dark mode</h2>
+        <div class="meta">1h 32m · 3 chunks · notebook-app</div>
+        <div class="chunks">
+          <div class="chunk"><span class="d"></span>Scaffolded the settings panel</div>
+          <div class="chunk"><span class="d"></span>Wired theme toggle to storage</div>
+          <div class="chunk"><span class="d"></span>Search + dark-mode flash fix</div>
+        </div>
+        <div class="thread"><b>Your thread — ready</b>
+          Shipped dark mode on notebook-app today 🌘 90 focused minutes, three
+          chunks: settings panel → theme toggle → killing the first-paint flash…
+          <div class="more">+2 more posts · X · LinkedIn · Mastodon</div>
+        </div>
+        <div class="pub">Publish</div>
+        <div class="alt"><span>Copy</span><span>Edit</span><span>Later</span></div>
+      </div>
+    </div>
+    <figcaption><b>4 · Recap</b>The story is already written from your chunks.
+      Approving it is the last tap of the session.</figcaption>
+  </figure>
+
+  <!-- 5 · NOTIFICATION -->
+  <figure>
+    <div class="phone">
+      <div class="lock">
+        <div class="clock">10:30</div>
+        <div class="date">Thursday, September 3</div>
+        <div class="notif">
+          <div class="icon"></div>
+          <div class="tx"><b>Check-in · Ship dark mode</b>
+            <span>30 min done. 2 commits detected — tap to log &amp; keep going.</span></div>
+          <div class="ago">now</div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>The nudge</b>Web Push on desktop, a local notification on
+      iPhone. Tapping lands directly on screen 3.</figcaption>
+  </figure>
+
+</div>
+</body>
+</html>
