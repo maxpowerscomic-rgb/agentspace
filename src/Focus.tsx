@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef, type FC } from 'react';
 import { api, type SessionView, type Formatted } from './api';
 import type { Project, Platform, PostMode, Thread } from './types';
 import { registerPush } from './push';
+import { scheduleCheckinNotif, cancelCheckinNotif } from './native-notif';
 
 const PRESETS = [25, 30, 50];
 
@@ -36,6 +37,15 @@ export function FocusApp({ onOpenLibrary }: { onOpenLibrary: () => void }) {
     es.addEventListener('checkin', () => refresh());
     return () => es.close();
   }, [refresh]);
+
+  // On the native app, schedule a local notification at the sprint boundary.
+  useEffect(() => {
+    if (session && session.status === 'running' && session.checkinDueAt) {
+      scheduleCheckinNotif(session.checkinDueAt, `Check-in · ${session.title}`, 'Time to log this sprint & keep going.');
+    } else {
+      cancelCheckinNotif();
+    }
+  }, [session?.status, session?.checkinDueAt, session?.title]);
 
   if (loading) return <div className="foc-wrap" />;
 

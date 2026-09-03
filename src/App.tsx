@@ -93,7 +93,7 @@ export default function App() {
     return (
       <>
         <FocusApp onOpenLibrary={() => setSurface('library')} />
-        {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setSurface('library'); setShowAdd(true); }} />}
+        {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setSurface('library'); setShowAdd(true); }} onConnect={() => { finishOnboard(); setSurface('library'); setView('connect'); }} />}
       </>
     );
   }
@@ -182,14 +182,14 @@ export default function App() {
 
       {showAdd && <AddProjectModal onClose={() => setShowAdd(false)} onAdded={() => { setShowAdd(false); refresh(); }} />}
       {toast && <div className="toast">✦ {toast}</div>}
-      {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setShowAdd(true); }} />}
+      {onboard && <Onboarding onDone={finishOnboard} onAddProject={() => { finishOnboard(); setShowAdd(true); }} onConnect={() => { finishOnboard(); setView('connect'); }} />}
     </div>
   );
 }
 
 type Slide = { icon: ReactElement; title: string; body: ReactElement };
 
-function Onboarding({ onDone, onAddProject }: { onDone: () => void; onAddProject: () => void }) {
+function Onboarding({ onDone, onAddProject, onConnect }: { onDone: () => void; onAddProject: () => void; onConnect: () => void }) {
   const [i, setI] = useState(0);
   const slides: Slide[] = [
     {
@@ -225,6 +225,13 @@ function Onboarding({ onDone, onAddProject }: { onDone: () => void; onAddProject
         summaries and the prompt box, so there's <b>nothing to paste and no extra bill</b>. Just have{' '}
         <code>claude</code> installed and logged in. (Prefer a key? Set one and wiwo uses it instead.)</p>,
     },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M4 4h16v16H4z" opacity="0" /><path d="M18 8a3 3 0 1 0-2.83-4M6 8a3 3 0 1 1 2.83-4M12 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /><path d="M12 16v-3M7.5 6.5l3 4M16.5 6.5l-3 4" /></svg>,
+      title: 'Connect your accounts',
+      body: <p>To post a thread straight from a session, connect an account (X, LinkedIn, Threads,
+        Mastodon, Bluesky). You can do it now or later from the <b>Library → Connections</b>. Skip it
+        and wiwo still writes every thread — you just copy &amp; paste (<b>author mode</b>).</p>,
+    },
   ];
   const last = i === slides.length - 1;
   const s = slides[i];
@@ -247,6 +254,9 @@ function Onboarding({ onDone, onAddProject }: { onDone: () => void; onAddProject
             ? <button className="btn-add" onClick={onAddProject}>Add your first project</button>
             : <button className="btn-add" onClick={() => setI(i + 1)}>Next</button>}
         </div>
+        {s.title === 'Connect your accounts' && (
+          <button className="ob-connect" onClick={onConnect}>Connect an account now →</button>
+        )}
       </div>
     </div>
   );

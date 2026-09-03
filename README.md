@@ -10,6 +10,25 @@ transcripts** — and builds a daily log automatically. wiwo is an *observer*: i
 only ever reads your repos, never writes to them, and never interrupts your
 coding agent mid-build.
 
+## v2 — focus sessions ("log and keep going")
+
+The default surface is a pomodoro-style focus loop:
+
+> **Set a task → work → check in every 30 min → recap → publish.**
+
+- **Start** — name the work, pick a project, pick an interval (25 / 30 / 50 min).
+- **Focus** — a timer ring; wiwo stays silent and collects commits quietly.
+- **Check-in** — at each **sprint** boundary wiwo nudges you (Web Push on
+  desktop/PWA, a local notification on the iOS app). Log one line — type it or
+  tap **⤵ Pull from changelog** to draft it from your commits — optionally note
+  another project, then **Back to work** or **End sprint**. You control the clock.
+- **Recap** — the session is already a thread. **Publish all sprints** together
+  or any single sprint on its own, natively or copy/paste.
+
+The v1 dashboard, daily log, digest, drafts and connections all still exist —
+they now live behind the **⋯ Library**, and everything (streak, digest, thread)
+is a rollup of your sprints. See [`docs/pomo-redesign.md`](docs/pomo-redesign.md).
+
 See [`docs/wiwo-plan.md`](docs/wiwo-plan.md) for the full plan and
 [`docs/wiwo-mockup.html`](docs/wiwo-mockup.html) for the UI mockup.
 

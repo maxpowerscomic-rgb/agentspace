@@ -341,3 +341,5 @@ select.foc-chip{appearance:none;padding-right:14px}
 .foc-alt{display:flex;justify-content:center;gap:22px;font-size:13px;color:var(--ink-3);font-weight:600;margin-top:2px}
 .foc-alt span{cursor:pointer}
 .foc-alt span:hover{color:var(--ink)}
+.ob-connect{margin-top:14px;width:100%;background:transparent;border:0;color:var(--brand);font-size:13.5px;font-weight:700;cursor:pointer;padding:4px}
+.ob-connect:hover{text-decoration:underline}
