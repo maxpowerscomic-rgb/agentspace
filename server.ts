@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { setupApiRoutes } from "./src/server/api.js";
 import { initWatchers } from "./src/server/watcher.js";
 import { startScheduler } from "./src/server/scheduler.js";
+import { restoreSessionTimers } from "./src/server/sprints.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,7 @@ async function startServer() {
   // Phase 2/3: resume auto-scan watchers and the scheduled-posting loop.
   initWatchers();
   startScheduler();
+  restoreSessionTimers();
 
   // Serve uploaded before/after images
   app.use("/uploads", express.static(path.join(__dirname, "uploads")));

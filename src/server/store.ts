@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { encrypt, decrypt } from './crypto.js';
-import type { WiwoData, Project, Change, SavedThread, SavedConnection, Platform } from '../types.js';
+import type { WiwoData, Project, Change, SavedThread, SavedConnection, Platform, Task, Session, PushSub } from '../types.js';
 
 const SECRET_FIELDS: (keyof SavedConnection)[] = ['token', 'appPassword', 'refreshToken'];
 
@@ -20,8 +20,13 @@ function decConn(c: SavedConnection): SavedConnection {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, '../../data');
-const DATA_FILE = path.join(DATA_DIR, 'wiwo.json');
+// Overridable for tests / alternate data locations.
+const DATA_DIR = process.env.WIWO_DATA_DIR
+  ? path.resolve(process.env.WIWO_DATA_DIR)
+  : path.resolve(__dirname, '../../data');
+const DATA_FILE = process.env.WIWO_DATA_FILE
+  ? path.resolve(process.env.WIWO_DATA_FILE)
+  : path.join(DATA_DIR, 'wiwo.json');
 
 function ensure() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -174,5 +179,67 @@ export function deleteConnection(id: string): void {
     const next = data.connections.find((c) => c.platform === removed.platform);
     if (next) next.isDefault = true;
   }
+  write(data);
+}
+
+// ---- v2: tasks & focus sessions ----
+export function getTasks(): Task[] {
+  return read().tasks ?? [];
+}
+
+export function upsertTask(task: Task): Task {
+  const data = read();
+  if (!data.tasks) data.tasks = [];
+  const i = data.tasks.findIndex((t) => t.id === task.id);
+  if (i >= 0) data.tasks[i] = task;
+  else data.tasks.push(task);
+  write(data);
+  return task;
+}
+
+export function getSessions(): Session[] {
+  return read().sessions ?? [];
+}
+
+export function getSession(id: string): Session | undefined {
+  return (read().sessions ?? []).find((s) => s.id === id);
+}
+
+/** The one session that isn't ended, if any (wiwo runs a single focus at a time). */
+export function getActiveSession(): Session | undefined {
+  return (read().sessions ?? []).find((s) => s.status !== 'ended');
+}
+
+export function upsertSession(session: Session): Session {
+  const data = read();
+  if (!data.sessions) data.sessions = [];
+  const i = data.sessions.findIndex((s) => s.id === session.id);
+  if (i >= 0) data.sessions[i] = session;
+  else data.sessions.push(session);
+  write(data);
+  return session;
+}
+
+export function deleteSession(id: string): void {
+  const data = read();
+  data.sessions = (data.sessions ?? []).filter((s) => s.id !== id);
+  write(data);
+}
+
+// ---- Web Push subscriptions ----
+export function getPushSubs(): PushSub[] {
+  return read().pushSubs ?? [];
+}
+
+export function addPushSub(sub: PushSub): void {
+  const data = read();
+  if (!data.pushSubs) data.pushSubs = [];
+  if (!data.pushSubs.some((s) => s.endpoint === sub.endpoint)) data.pushSubs.push(sub);
+  write(data);
+}
+
+export function removePushSub(endpoint: string): void {
+  const data = read();
+  data.pushSubs = (data.pushSubs ?? []).filter((s) => s.endpoint !== endpoint);
   write(data);
 }

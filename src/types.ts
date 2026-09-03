@@ -118,9 +118,68 @@ export interface PostResult {
   posts?: { ok: boolean; url?: string; error?: string }[];
 }
 
+// ---- v2: focus sessions ("log and keep going") ----
+
+/** A thing to work on. Belongs to one project; drives focus sessions. */
+export interface Task {
+  id: string;
+  projectId: string;
+  title: string;
+  /** Minutes per sprint before wiwo checks in. */
+  intervalMin: number;
+  createdAt: string;
+  status: 'active' | 'done';
+}
+
+/** One work interval within a session. The atomic unit of v2. */
+export interface Sprint {
+  id: string;
+  index: number; // 1-based within the session
+  startedAt: string;
+  endedAt?: string;
+  /** What the user logged (typed, or pulled from the changelog). */
+  line: string;
+  /** True if `line` was filled from detected commits rather than typed. */
+  auto: boolean;
+  /** If the user attributed this sprint to a different project. */
+  altProjectId?: string;
+  /** Commit hashes detected during this sprint (informational). */
+  commits: string[];
+  /** The user skipped logging this sprint. */
+  skipped?: boolean;
+  /** Result of publishing this sprint on its own, if posted. */
+  postResult?: PostResult;
+}
+
+/** A run of sprints against one task. */
+export interface Session {
+  id: string;
+  taskId: string;
+  projectId: string;
+  title: string;
+  intervalMin: number;
+  startedAt: string;
+  endedAt?: string;
+  /** ISO time the current sprint's check-in is due (server-side timer). */
+  checkinDueAt?: string;
+  status: 'running' | 'awaiting-checkin' | 'ended';
+  sprints: Sprint[];
+}
+
 export interface WiwoData {
   projects: Project[];
   changes: Change[];
   threads?: SavedThread[];
   connections?: SavedConnection[];
+  tasks?: Task[];
+  sessions?: Session[];
+  /** Web Push subscriptions (PWA notifications). */
+  pushSubs?: PushSub[];
+}
+
+/** A stored Web Push subscription (browser PushManager JSON). */
+export interface PushSub {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  createdAt: string;
 }

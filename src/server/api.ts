@@ -22,7 +22,12 @@ import { postThread } from './poster.js';
 import { activeProvider, bridgeEnabled } from './providers.js';
 import { postToPlatform } from './native.js';
 import { startMastodon, startX, startLinkedIn, completeOAuth, sweepPending, xConfigured, liConfigured } from './oauth.js';
-import type { Project, Change, BuildStatus, Platform, SavedThread, SavedConnection, PostMode } from '../types.js';
+import {
+  startSession, checkin, endSession, scanSprint, compileSession, compileSprint,
+  sessionView, sessionEvents,
+} from './sprints.js';
+import { getPublicKey, sendPush } from './push.js';
+import type { Project, Change, BuildStatus, Platform, SavedThread, SavedConnection, PostMode, Session } from '../types.js';
 
 function redactConn(c: SavedConnection) {
   return { id: c.id, platform: c.platform, handle: c.handle, instance: c.instance, isDefault: !!c.isDefault, connectedAt: c.connectedAt, connected: true };
@@ -420,11 +425,14 @@ export function setupApiRoutes(app: Express): void {
     });
     res.write(': connected\n\n');
     const onScan = (payload: unknown) => res.write(`event: scanned\ndata: ${JSON.stringify(payload)}\n\n`);
+    const onCheckin = (payload: unknown) => res.write(`event: checkin\ndata: ${JSON.stringify(payload)}\n\n`);
     watchEvents.on('scanned', onScan);
+    sessionEvents.on('checkin', onCheckin);
     const ping = setInterval(() => res.write(': ping\n\n'), 25000);
     _req.on('close', () => {
       clearInterval(ping);
       watchEvents.off('scanned', onScan);
+      sessionEvents.off('checkin', onCheckin);
     });
   });
 
@@ -459,6 +467,96 @@ export function setupApiRoutes(app: Express): void {
       isGit: fs.existsSync(path.join(target, '.git')),
       entries,
     });
+  });
+
+  // ---- v2: focus sessions ("log and keep going") ----
+  app.get('/api/session', (_req: Request, res: Response) => {
+    res.json(sessionView(store.getActiveSession()));
+  });
+
+  app.post('/api/session', (req: Request, res: Response) => {
+    const { projectId, title, intervalMin } = req.body ?? {};
+    if (!projectId || !store.getProject(projectId)) return res.status(400).json({ error: 'unknown project' });
+    if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
+    res.status(201).json(sessionView(startSession({ projectId, title: String(title), intervalMin })));
+  });
+
+  // Draft the current sprint's line from commits since it started (pull-from-changelog).
+  app.get('/api/session/:id/scan', async (req: Request, res: Response) => {
+    const s = store.getSession(req.params.id);
+    if (!s) return res.status(404).json({ error: 'no session' });
+    res.json(await scanSprint(req.params.id));
+  });
+
+  // Log the current sprint; action 'continue' keeps going, 'end' finishes.
+  app.post('/api/session/:id/checkin', (req: Request, res: Response) => {
+    const { line, auto, altProjectId, skipped, commits, action } = req.body ?? {};
+    const s = checkin(req.params.id, { line, auto, altProjectId, skipped, commits, action: action === 'end' ? 'end' : 'continue' });
+    if (!s) return res.status(404).json({ error: 'no session' });
+    res.json(sessionView(s.status === 'ended' ? undefined : s) ?? { ...s, ended: true });
+  });
+
+  app.post('/api/session/:id/end', (req: Request, res: Response) => {
+    const s = endSession(req.params.id, req.body?.line);
+    if (!s) return res.status(404).json({ error: 'no session' });
+    res.json({ ...s, ended: true });
+  });
+
+  // Compile a session (or one sprint) into a thread and, optionally, publish it.
+  app.post('/api/session/:id/publish', async (req: Request, res: Response) => {
+    const session = store.getSession(req.params.id);
+    if (!session) return res.status(404).json({ error: 'no session' });
+    const platform: Platform = req.body?.platform ?? 'x';
+    const mode: PostMode = req.body?.mode === 'native' ? 'native' : 'author';
+    const sprintId: string | undefined = req.body?.sprintId;
+
+    const compiled = sprintId ? compileSprint(session, sprintId, platform) : compileSession(session, platform);
+    if (!compiled) return res.status(400).json({ error: 'nothing to publish' });
+
+    const saved: SavedThread = {
+      id: randomUUID(),
+      thread: compiled.thread,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'draft',
+      mode,
+    };
+    store.upsertThread(saved);
+    const result = await postThread(saved);
+    saved.status = result.ok ? 'posted' : 'draft';
+    saved.postedAt = result.ok ? new Date().toISOString() : undefined;
+    saved.lastResult = result;
+    store.upsertThread(saved);
+
+    if (sprintId && result.ok) {
+      session.sprints = session.sprints.map((sp) => (sp.id === sprintId ? { ...sp, postResult: result } : sp));
+      store.upsertSession(session);
+    }
+    res.json({ saved, result, formatted: compiled.formatted });
+  });
+
+  // Just compile (preview) without posting.
+  app.get('/api/session/:id/thread', (req: Request, res: Response) => {
+    const session = store.getSession(req.params.id);
+    if (!session) return res.status(404).json({ error: 'no session' });
+    const platform = (req.query.platform as Platform) || 'x';
+    res.json(compileSession(session, platform));
+  });
+
+  // ---- Web Push (PWA notifications) ----
+  app.get('/api/push/key', async (_req: Request, res: Response) => {
+    res.json({ key: await getPublicKey() });
+  });
+
+  app.post('/api/push/subscribe', (req: Request, res: Response) => {
+    const sub = req.body ?? {};
+    if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) return res.status(400).json({ error: 'bad subscription' });
+    store.addPushSub({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, createdAt: new Date().toISOString() });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/push/test', async (_req: Request, res: Response) => {
+    res.json(await sendPush({ title: 'wiwo', body: 'Push is working — you’ll get sprint check-ins here.', tag: 'wiwo-test', data: { url: '/' } }));
   });
 
   app.get('/api/health', (_req, res) =>
