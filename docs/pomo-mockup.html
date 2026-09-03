@@ -65,7 +65,13 @@
   .noticed b{color:var(--brand);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
   .entry{border:1.5px solid var(--line);border-radius:14px;padding:14px;font-size:15.5px;line-height:1.45;color:var(--ink);min-height:76px}
   .entry .edit{color:var(--ink-3);font-size:12px;float:right}
-  .logbtn{background:var(--brand);color:#fff;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:700}
+  .pullrow{display:flex;align-items:center;gap:10px;margin-top:-6px}
+  .pull{font-size:13px;font-weight:600;color:var(--brand);background:var(--brand-soft);border-radius:12px;padding:8px 12px}
+  .detected{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+  .another{font-size:13.5px;color:var(--ink-2);font-weight:600;padding:2px 0}
+  .twobtn{display:flex;gap:10px;margin-top:4px}
+  .logbtn{flex:1;background:var(--brand);color:#fff;border-radius:16px;padding:16px;text-align:center;font-size:15.5px;font-weight:700}
+  .endbtn2{flex:1;background:var(--panel);color:var(--ink-2);border:1.5px solid var(--line);border-radius:16px;padding:16px;text-align:center;font-size:15.5px;font-weight:700}
   .skip{text-align:center;color:var(--ink-3);font-size:13.5px;font-weight:600}
 
   /* ------- 4 · RECAP ------- */
@@ -78,6 +84,7 @@
   .chunk::before{content:"";position:absolute;left:5.5px;top:22px;bottom:-8px;width:1.5px;background:var(--line)}
   .chunk:last-child::before{display:none}
   .chunk .d{width:12px;height:12px;border-radius:50%;background:var(--brand);flex:none;margin-top:3px}
+  .chunk .pubone{margin-left:auto;font-size:11.5px;color:var(--brand);font-weight:600;flex:none}
   .thread{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:14px;font-size:13.5px;line-height:1.5;color:var(--ink)}
   .thread b{display:block;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
   .thread .more{color:var(--ink-3);font-size:12px;margin-top:6px}
@@ -159,18 +166,25 @@
     <div class="phone">
       <div class="statusbar"><span>10:30</span><span>●●●</span></div>
       <div class="checkin">
-        <div class="when">Check-in · 30 min</div>
-        <h2>What happened?</h2>
-        <div class="noticed"><b>wiwo noticed</b>2 commits on notebook-app —
-          full-text search · dark-mode flash fix</div>
-        <div class="entry"><span class="edit">edit</span>Added instant full-text search
+        <div class="when">Sprint 2 done · 30 min</div>
+        <h2>What did you get done?</h2>
+        <div class="entry"><span class="edit">✎</span>Added instant full-text search
           with highlighting, and fixed the dark-mode flash on first paint.</div>
-        <div class="logbtn">Log it → keep going</div>
-        <div class="skip">skip this one</div>
+        <div class="pullrow">
+          <span class="pull">⤵ Pull from changelog</span>
+          <span class="detected">2 commits</span>
+        </div>
+        <div class="another">+ worked on another project</div>
+        <div class="twobtn">
+          <div class="logbtn">Back to work</div>
+          <div class="endbtn2">End sprint</div>
+        </div>
+        <div class="skip">publish this sprint now ▸</div>
       </div>
     </div>
-    <figcaption><b>3 · Check-in</b>The heart of the app. Pre-written from the
-      changelog when possible — approve in one tap, ≤5 seconds, back to work.</figcaption>
+    <figcaption><b>3 · Check-in</b>Log the sprint: type it, or pull it from the
+      changelog. Note another project if you switched. Then Back to work or End
+      sprint — you control the clock. Publish this sprint on its own if you want.</figcaption>
   </figure>
 
   <!-- 4 · RECAP -->
@@ -182,21 +196,22 @@
         <h2>Ship dark mode</h2>
         <div class="meta">1h 32m · 3 chunks · notebook-app</div>
         <div class="chunks">
-          <div class="chunk"><span class="d"></span>Scaffolded the settings panel</div>
-          <div class="chunk"><span class="d"></span>Wired theme toggle to storage</div>
-          <div class="chunk"><span class="d"></span>Search + dark-mode flash fix</div>
+          <div class="chunk"><span class="d"></span>Scaffolded the settings panel<span class="pubone">publish ▸</span></div>
+          <div class="chunk"><span class="d"></span>Wired theme toggle to storage<span class="pubone">publish ▸</span></div>
+          <div class="chunk"><span class="d"></span>Search + dark-mode flash fix<span class="pubone">publish ▸</span></div>
         </div>
         <div class="thread"><b>Your thread — ready</b>
           Shipped dark mode on notebook-app today 🌘 90 focused minutes, three
-          chunks: settings panel → theme toggle → killing the first-paint flash…
+          sprints: settings panel → theme toggle → killing the first-paint flash…
           <div class="more">+2 more posts · X · LinkedIn · Mastodon</div>
         </div>
-        <div class="pub">Publish</div>
+        <div class="pub">Publish all sprints</div>
         <div class="alt"><span>Copy</span><span>Edit</span><span>Later</span></div>
       </div>
     </div>
-    <figcaption><b>4 · Recap</b>The story is already written from your chunks.
-      Approving it is the last tap of the session.</figcaption>
+    <figcaption><b>4 · Recap</b>Publish all sprints as one thread, or any single
+      sprint on its own. The story is already written — approving is the last tap.
+      (Accounts are connected during onboarding, so this just works.)</figcaption>
   </figure>
 
   <!-- 5 · NOTIFICATION -->

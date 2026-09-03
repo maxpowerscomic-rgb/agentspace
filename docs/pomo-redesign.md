@@ -22,6 +22,26 @@ The design north star (the Jobs test): **every screen has exactly one job, one
 primary action, and could be understood by someone who has never seen the app.**
 If a control isn't needed *right now*, it doesn't exist on screen.
 
+## Decisions locked (review round 1)
+
+- **Interval**: 30 min default, presets 25 / 30 / 50, free-form allowed.
+- **Terminology**: a work interval is a **sprint**. A session is a run of sprints.
+- **Check-in is manual-exit, not auto-resume.** After you log what you did, you
+  choose **Back to work** (start the next sprint) or **End sprint** (finish the
+  session). wiwo never silently restarts the clock.
+- **Pull from changelog is a button, not automatic.** The entry field starts
+  empty (or with your typing); a **⤵ Pull from changelog** button drops in what
+  wiwo detected from commits, which you can then edit. You stay in control of
+  what gets written.
+- **Project switch inside the check-in.** When logging, a **+ worked on another
+  project** option lets you attribute the sprint (or add a second line) to a
+  different project without leaving the flow.
+- **Sprints are publishable** — each sprint can be posted to your linked
+  accounts on its own, or all sprints published together at the recap.
+- **Onboarding includes connecting social accounts**, so publishing works from
+  the first session (still skippable — author-only mode needs no account).
+- **v1 stays** behind "⋯" as **Library** (log, digest, drafts, connections).
+
 ## 2. The loop
 
 ```
@@ -34,16 +54,19 @@ SET TASK  →  WORK  →  CHECK-IN  →  WORK  →  CHECK-IN  →  …  →  END
    interval (default 30 min). Press Start. That's the entire setup.
 2. **Work.** wiwo is silent. A timer runs. If the project has auto-scan on,
    wiwo quietly collects commits/changelog entries as they land.
-3. **Check-in (the heart of the app).** At each interval boundary wiwo sends a
+3. **Check-in (the heart of the app).** At each sprint boundary wiwo sends a
    notification. Tapping it opens ONE card:
-   - If wiwo detected changes (commits since the last check-in), the entry is
-     **already written** — the user's only job is to tap **Log it** (or edit
-     the line first).
-   - If nothing was detected, a single text field: type one line, tap Log it.
-   - Either way: ≤5 seconds, then straight back to work.
-4. **End session.** Total time, the chunk timeline, and — already compiled —
-   the session thread ("1h30 on Ship dark mode: scaffolded settings → wired
-   toggle → fixed flash"). One button publishes/copies it. Done.
+   - A text field for one line. Tap **⤵ Pull from changelog** to drop in what
+     wiwo detected (commits since the last sprint); edit freely, or just type.
+   - Optional **+ worked on another project** to attribute or add a second line
+     for a different project.
+   - Then choose **Back to work** (starts the next sprint) or **End sprint**.
+   - Optionally **publish this sprint** to a linked account right here.
+   - Target: a few seconds, then straight back to work.
+4. **Recap (End sprint).** Total time, the sprint timeline, and — already
+   compiled — the session thread ("1h30 on Ship dark mode: scaffolded settings →
+   wired toggle → fixed flash"). Publish **all sprints together**, or any single
+   sprint; or copy / edit / save for later.
 
 **The chunk is the atomic unit.** A chunk = one interval + one line + whatever
 commits landed in it. Days, threads, and digests are all just rollups of chunks,
@@ -106,12 +129,10 @@ streak keep working from the same store.
 5. **Polish** — sounds off by default, reduced-motion, keyboard-only check-in
    (Enter logs), auto-end after N silent intervals.
 
-## 6. Open questions (for review)
+## 6. Review status
 
-- **Interval default**: 30 min fixed default with 25/50 presets, or free-form?
-- **Break intervals**: classic pomodoro inserts 5-min breaks — do we? (Plan
-  assumes no: wiwo checks in and immediately resumes; breaks are the user's
-  business.)
-- **Multiple projects per task?** Plan assumes a task belongs to one project.
-- **Where does v1's dashboard live?** Plan: behind "⋯" as "Library" (log,
-  digest, drafts, connections) — the loop is the app now.
+Round 1 questions all resolved — see **Decisions locked** at the top. Next
+review is on the updated mockups (this doc's [`pomo-mockup.html`](pomo-mockup.html)):
+the revised check-in card (pull-from-changelog button, project-switch, back-to-work
+vs end-sprint) and the recap (publish-all vs per-sprint). Once those read right,
+build starts at Phase 1 (session engine).
