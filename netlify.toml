@@ -1,0 +1,21 @@
+# Netlify config for the wiwo marketing site.
+# The site is fully static — the wiwo APP itself runs locally on the user's
+# machine (it needs a persistent Node server, git access and Playwright), so
+# only the landing page + browser demo are hosted here.
+
+[build]
+  publish = "site"
+  # No build step — the site is hand-authored static HTML.
+  command = ""
+
+[[redirects]]
+  from = "/demo"
+  to = "/demo.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

@@ -1,5 +1,5 @@
 {
-  "name": "AgentSpace",
-  "description": "",
+  "name": "wiwo",
+  "description": "What I worked on — a dashboard that auto-logs your dev progress and compiles it into a shareable thread.",
   "requestFramePermissions": []
 }
